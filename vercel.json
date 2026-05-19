@@ -1,0 +1,12 @@
+{
+  "crons": [
+    { "path": "/api/partner-metrics/rebuild", "schedule": "30 9 * * *" },
+    { "path": "/api/partner-metrics/rebuild", "schedule": "0 13 * * *" },
+    { "path": "/api/partner-metrics/rebuild", "schedule": "30 15 * * *" },
+    { "path": "/api/partner-metrics/rebuild", "schedule": "0 17 * * *" },
+    { "path": "/api/partner-metrics/rebuild", "schedule": "30 18 * * *" },
+    { "path": "/api/partner-metrics/rebuild", "schedule": "0 20 * * *" },
+    { "path": "/api/partner-metrics/rebuild", "schedule": "30 22 * * *" },
+    { "path": "/api/partner-metrics/rebuild", "schedule": "0 0 * * *" }
+  ]
+}
