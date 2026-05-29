@@ -16,7 +16,6 @@ import {
   totalize,
 } from "@/lib/analytics";
 
-type Mode = "dashboard" | "scorecard";
 type ParetoPoint = ReturnType<typeof buildPareto>[number];
 type DetailMetric = "r1" | "propostas" | "contratos" | "tcv" | "faturamento" | "comissao";
 type HoveredParetoDetails = {
@@ -337,7 +336,6 @@ function LegendBadge() {
 function FilterBar({
   filters,
   setFilters,
-  mode,
   availableYears,
   availableTiers,
   availableOwners,
@@ -349,7 +347,6 @@ function FilterBar({
 }: {
   filters: FilterState;
   setFilters: Dispatch<SetStateAction<FilterState>>;
-  mode: Mode;
   availableYears: number[];
   availableTiers: string[];
   availableOwners: string[];
@@ -388,8 +385,7 @@ function FilterBar({
 
   return (
     <section style={{ ...cardStyle(), marginBottom: 22 }}>
-      <SectionTitle title="Filtros" subtitle={mode === "dashboard" ? "Recorte inicial para ranking e gráficos, incluindo período." : "Recorte inicial para ranking, paretos e scorecards."} />
-      {mode === "dashboard" && (
+      <SectionTitle title="Filtros" subtitle="Recorte inicial para ranking e gráficos, incluindo período." />
         <div style={{ display: "grid", gap: 14, marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <button
@@ -463,13 +459,11 @@ function FilterBar({
             </>
           )}
         </div>
-      )}
-      <div style={{ display: "grid", gridTemplateColumns: mode === "dashboard" ? "1.3fr 1.1fr 1.1fr 1.1fr 1fr 1.2fr 1.2fr 1fr 1fr 1fr" : "2fr 1.3fr", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1.1fr 1.1fr 1.1fr 1fr 1.2fr 1.2fr 1fr 1fr 1fr", gap: 12 }}>
         <div style={itemStyle}>
           <label style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280" }}>Parceiro</label>
           <input value={filters.search} onChange={(e) => setFilters((c) => ({ ...c, search: e.target.value }))} placeholder="Buscar parceiro..." style={inputStyle} />
         </div>
-        {mode === "dashboard" && (
           <>
             {showDashboardDateFilters ? (
               <>
@@ -555,7 +549,6 @@ function FilterBar({
               />
             </div>
           </>
-        )}
         <div style={itemStyle}>
           <label style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280" }}>Ordenar por</label>
           <select value={filters.sortBy} onChange={(e) => setFilters((c) => ({ ...c, sortBy: e.target.value as FilterState["sortBy"] }))} style={inputStyle}>
@@ -1048,32 +1041,6 @@ function HighlightsLowlights({ data }: { data: PartnerMetric[] }) {
   );
 }
 
-function ExecutiveBoard({ data }: { data: PartnerMetric[] }) {
-  return (
-    <section style={{ ...cardStyle() }}>
-      <SectionTitle title="Scorecard executivo" subtitle="Leitura rápida dos parceiros com melhor geração de valor na base atual." />
-      <div style={{ display: "grid", gap: 12 }}>
-        {data.slice(0, 6).map((row, index) => (
-          <div key={row.parceiro} style={{ padding: "16px 18px", borderRadius: 16, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <div style={{ fontWeight: 700 }}>{index + 1}. {row.parceiro}</div>
-              <div style={{ color: "#FFC130", fontSize: 12, fontWeight: 700 }}>{fmtMoneyMil(row.faturamentoGalapos)}</div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, color: "#9ca3af", fontSize: 12 }}>
-              <span>R1: {fmtInt(row.reunioesRealizadas)}</span>
-              <span>Propostas: {fmtInt(row.propostasEnviadas)}</span>
-              <span>Contratos: {fmtInt(row.contratosFechados)}</span>
-              <span>TCVp: {fmtMoneyMil(row.tcvPonderado)}</span>
-              <span>Tier: {row.tier}</span>
-              <span>Deals: {fmtInt(row.deals.length)}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function isEventInRange(event: ServiceJourneyEvent, filters: FilterState) {
   const activityTime = new Date(event.activityDate).getTime();
   const fromTime = filters.dateFrom ? new Date(filters.dateFrom).getTime() : Number.NEGATIVE_INFINITY;
@@ -1088,7 +1055,7 @@ function splitServiceGroups(value: string) {
     .filter(Boolean);
 }
 
-function MeetingJourneyTable({
+export function MeetingJourneyTable({
   events,
   filters,
   data,
@@ -1580,12 +1547,8 @@ function MeetingJourneyTable({
 
 export function PartnerAnalytics({
   data,
-  serviceJourneyEvents,
-  mode,
 }: {
   data: PartnerMetric[];
-  serviceJourneyEvents: ServiceJourneyEvent[];
-  mode: Mode;
 }) {
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const [rankingRowLimit, setRankingRowLimit] = useState(20);
@@ -1761,7 +1724,6 @@ export function PartnerAnalytics({
       <FilterBar
         filters={filters}
         setFilters={setFilters}
-        mode={mode}
         availableYears={availableYears}
         availableTiers={availableTiers}
         availableOwners={availableOwners}
@@ -1773,46 +1735,27 @@ export function PartnerAnalytics({
       />
 
       <div style={{ display: "grid", gap: 22 }}>
-        {mode === "dashboard" ? (
-          <>
-            <RankingTable
-              data={filtered}
-              setHoveredDetails={setHoveredDetails}
-              setPinnedDetails={setPinnedDetails}
-              rankMap={rankMap}
-              rowLimit={rankingRowLimit}
-              setRowLimit={setRankingRowLimit}
-            />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(560px, 1fr))", gap: 18 }}>
-              <ParetoChart title="Contratos fechados" data={paretoContratos} metric="contratos" periodLabel={periodLabel} setHoveredDetails={setHoveredDetails} setPinnedDetails={setPinnedDetails} />
-              <ParetoChart title="TCV" data={paretoTcv} metric="tcv" periodLabel={periodLabel} setHoveredDetails={setHoveredDetails} setPinnedDetails={setPinnedDetails} />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(560px, 1fr))", gap: 18 }}>
-              <ParetoChart title="R1" data={paretoReunioes} metric="r1" periodLabel={periodLabel} setHoveredDetails={setHoveredDetails} setPinnedDetails={setPinnedDetails} />
-              <ParetoChart title="Propostas enviadas" data={paretoPropostas} metric="propostas" periodLabel={periodLabel} setHoveredDetails={setHoveredDetails} setPinnedDetails={setPinnedDetails} />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(560px, 1fr))", gap: 18 }}>
-              <ParetoChart title="Faturamento Galapos" data={paretoFaturamento} metric="faturamento" periodLabel={periodLabel} maxVisibleItems={10} setHoveredDetails={setHoveredDetails} setPinnedDetails={setPinnedDetails} />
-              <ParetoChart title="Comissões pagas" data={paretoComissao} metric="comissao" periodLabel={periodLabel} maxVisibleItems={10} setHoveredDetails={setHoveredDetails} setPinnedDetails={setPinnedDetails} />
-            </div>
-            <HighlightsLowlights data={filteredForLowlights} />
-          </>
-        ) : (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.15fr) minmax(360px, 0.85fr)", gap: 18 }}>
-              <RankingTable
-                data={filtered}
-                setHoveredDetails={setHoveredDetails}
-                setPinnedDetails={setPinnedDetails}
-                rankMap={rankMap}
-                rowLimit={rankingRowLimit}
-                setRowLimit={setRankingRowLimit}
-              />
-              <ExecutiveBoard data={filtered} />
-            </div>
-            <MeetingJourneyTable events={serviceJourneyEvents} filters={filters} data={data} />
-          </>
-        )}
+        <RankingTable
+          data={filtered}
+          setHoveredDetails={setHoveredDetails}
+          setPinnedDetails={setPinnedDetails}
+          rankMap={rankMap}
+          rowLimit={rankingRowLimit}
+          setRowLimit={setRankingRowLimit}
+        />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(560px, 1fr))", gap: 18 }}>
+          <ParetoChart title="Contratos fechados" data={paretoContratos} metric="contratos" periodLabel={periodLabel} setHoveredDetails={setHoveredDetails} setPinnedDetails={setPinnedDetails} />
+          <ParetoChart title="TCV" data={paretoTcv} metric="tcv" periodLabel={periodLabel} setHoveredDetails={setHoveredDetails} setPinnedDetails={setPinnedDetails} />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(560px, 1fr))", gap: 18 }}>
+          <ParetoChart title="R1" data={paretoReunioes} metric="r1" periodLabel={periodLabel} setHoveredDetails={setHoveredDetails} setPinnedDetails={setPinnedDetails} />
+          <ParetoChart title="Propostas enviadas" data={paretoPropostas} metric="propostas" periodLabel={periodLabel} setHoveredDetails={setHoveredDetails} setPinnedDetails={setPinnedDetails} />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(560px, 1fr))", gap: 18 }}>
+          <ParetoChart title="Faturamento Galapos" data={paretoFaturamento} metric="faturamento" periodLabel={periodLabel} maxVisibleItems={10} setHoveredDetails={setHoveredDetails} setPinnedDetails={setPinnedDetails} />
+          <ParetoChart title="Comissões pagas" data={paretoComissao} metric="comissao" periodLabel={periodLabel} maxVisibleItems={10} setHoveredDetails={setHoveredDetails} setPinnedDetails={setPinnedDetails} />
+        </div>
+        <HighlightsLowlights data={filteredForLowlights} />
       </div>
       </>
     </div>

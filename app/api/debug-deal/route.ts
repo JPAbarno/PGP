@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
+import { getInternalUserAccessStatus } from "@/lib/access-control";
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -7,6 +10,17 @@ function getErrorMessage(err: unknown): string {
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    const accessStatus = getInternalUserAccessStatus(session?.user?.email);
+
+    if (accessStatus === "unauthenticated") {
+      return NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
+    }
+
+    if (accessStatus === "forbidden") {
+      return NextResponse.json({ error: "Acesso restrito a usuários Galapos." }, { status: 403 });
+    }
+
     const token = process.env.HUBSPOT_PRIVATE_APP_TOKEN;
     if (!token) {
       return NextResponse.json({ error: "Token do HubSpot não encontrado. Verifique o .env.local" }, { status: 500 });

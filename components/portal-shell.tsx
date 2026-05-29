@@ -1,8 +1,8 @@
 ﻿import Link from "next/link";
 import { ReactNode } from "react";
 
-export function PortalShell({ title, subtitle, active, children }: { title: string; subtitle: string; active: "dashboard" | "scorecard"; children: ReactNode }) {
-  const navLink = (href: string, label: string, isActive: boolean) => ({
+export function PortalShell({ title, subtitle, active, children }: { title: string; subtitle: string; active: "dashboard"; children: ReactNode }) {
+  const navLink = (isActive: boolean) => ({
     padding: "8px 14px",
     fontSize: 12,
     fontWeight: 600,
@@ -23,8 +23,7 @@ export function PortalShell({ title, subtitle, active, children }: { title: stri
             <div style={{ color: "#9ca3af", fontSize: 13 }}>Portal novo, isolado do ambiente do assessor</div>
           </div>
           <nav style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Link href="/dashboard" style={navLink("/dashboard", "Dashboard", active === "dashboard")}>Dashboard</Link>
-            <Link href="/scorecard" style={navLink("/scorecard", "Scorecard", active === "scorecard")}>Scorecard</Link>
+            <Link href="/dashboard" style={navLink(active === "dashboard")}>Dashboard</Link>
           </nav>
         </div>
       </header>

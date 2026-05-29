@@ -8,7 +8,7 @@ export default function DashboardPage() {
       title="Dashboard"
       subtitle="Estrutura inicial para comparar parceiros com filtros, ranking e leituras de pareto por reuniões, propostas e contratos."
     >
-      <PartnerAnalyticsLoader mode="dashboard" />
+      <PartnerAnalyticsLoader />
     </PortalShell>
   );
 }

@@ -9,8 +9,6 @@ import {
   type ServiceJourneyEvent,
 } from "@/lib/mock-data";
 
-type Mode = "dashboard" | "scorecard";
-
 type ApiResponse = {
   partnerMetrics?: PartnerMetric[];
   serviceJourneyEvents?: ServiceJourneyEvent[];
@@ -38,9 +36,9 @@ type CacheEnvelope = {
 
 const CACHE_KEY = "analise-parceiros.partner-metrics.v11";
 
-export function PartnerAnalyticsLoader({ mode }: { mode: Mode }) {
+export function PartnerAnalyticsLoader() {
   const [data, setData] = useState<PartnerMetric[] | null>(null);
-  const [serviceJourneyEvents, setServiceJourneyEvents] = useState<ServiceJourneyEvent[]>([]);
+  const [, setServiceJourneyEvents] = useState<ServiceJourneyEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const [staleData, setStaleData] = useState(false);
@@ -315,7 +313,7 @@ export function PartnerAnalyticsLoader({ mode }: { mode: Mode }) {
           Atualizando dados reais de HubSpot + BI...
         </section>
       )}
-      <PartnerAnalytics data={data ?? mockPartnerMetrics} serviceJourneyEvents={serviceJourneyEvents} mode={mode} />
+      <PartnerAnalytics data={data ?? mockPartnerMetrics} />
     </div>
   );
 }

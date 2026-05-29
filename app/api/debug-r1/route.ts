@@ -1,5 +1,9 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
+import { getInternalUserAccessStatus } from "@/lib/access-control";
+
 type MeetingProperty = {
   name?: string;
   label?: string;
@@ -81,6 +85,17 @@ async function getMeetingSchema(token: string) {
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    const accessStatus = getInternalUserAccessStatus(session?.user?.email);
+
+    if (accessStatus === "unauthenticated") {
+      return NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
+    }
+
+    if (accessStatus === "forbidden") {
+      return NextResponse.json({ error: "Acesso restrito a usuários Galapos." }, { status: 403 });
+    }
+
     const token = process.env.HUBSPOT_PRIVATE_APP_TOKEN;
     if (!token) {
       return NextResponse.json({ error: "Token do HubSpot não encontrado." }, { status: 500 });
