@@ -40,16 +40,24 @@ Antes de implementar qualquer nova funcionalidade ou alteração relevante, leia
 
 - `specs/architecture/current-state.md`
 
+## Domínio
+
+- `specs/domain/users-roles-and-partner-access.md`
+
 ## Features
 
 - `specs/features/remove-scorecard.md`
 - `specs/features/access-management.md`
+- `specs/features/access-layers.md`
+- `specs/features/partner-portal-unification.md`
 
 ## Decisões
 
 - `specs/decisions/ADR-001-internal-access-only.md`
 - `specs/decisions/ADR-002-authjs-google-oauth.md`
 - `specs/decisions/ADR-003-authjs-microsoft-entra-id.md`
+- `specs/decisions/ADR-004-access-layer-model.md`
+- `specs/decisions/ADR-005-partner-portal-unification.md`
 
 ## Ordem recomendada de implementação
 
@@ -57,7 +65,16 @@ A ordem recomendada para as próximas mudanças é:
 
 1. Remover a aba/rota `Scorecard`, seguindo `specs/features/remove-scorecard.md`.
 2. Implementar gestão de acessos internos, seguindo `specs/features/access-management.md`.
-3. Proteger páginas e APIs conforme as ADRs de acesso e autenticação.
+3. Manter a proteção atual de páginas e APIs já feita na feature `access-management`.
+4. Definir tecnologia de persistência para Gestão de Acessos.
+5. Implementar modelo persistente de usuários, camadas, status e associação usuário-parceiro.
+6. Implementar camadas de acesso.
+7. Implementar escopo por parceiro no backend.
+8. Unificar o Portal do Assessor na rota `/portal-assessor`.
+
+Observação:
+
+- As features `access-layers` e `partner-portal-unification` dependem de decisão futura sobre persistência.
 
 ## Prompt base para futuras tarefas com IA
 
