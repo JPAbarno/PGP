@@ -2,7 +2,7 @@
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
-import { getInternalUserAccessStatus } from "@/lib/access-control";
+import { getManagedAccessDecision, isAdminAccess } from "@/lib/access-control";
 
 type MeetingProperty = {
   name?: string;
@@ -86,24 +86,28 @@ async function getMeetingSchema(token: string) {
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    const accessStatus = getInternalUserAccessStatus(session?.user?.email);
+    const decision = await getManagedAccessDecision(session?.user?.email);
 
-    if (accessStatus === "unauthenticated") {
+    if (decision.access === "unauthenticated") {
       return NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
     }
 
-    if (accessStatus === "forbidden") {
-      return NextResponse.json({ error: "Acesso restrito a usuários Galapos." }, { status: 403 });
+    if (!isAdminAccess(decision)) {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+  } catch {
+    return NextResponse.json({ error: "Erro ao validar acesso." }, { status: 500 });
+  }
+
+  try {
+    const dealId = request.nextUrl.searchParams.get("dealId")?.trim();
+    if (!dealId) {
+      return NextResponse.json({ error: "dealId é obrigatório." }, { status: 400 });
     }
 
     const token = process.env.HUBSPOT_PRIVATE_APP_TOKEN;
     if (!token) {
-      return NextResponse.json({ error: "Token do HubSpot não encontrado." }, { status: 500 });
-    }
-
-    const dealId = request.nextUrl.searchParams.get("dealId")?.trim();
-    if (!dealId) {
-      return NextResponse.json({ error: "Informe ?dealId=..." }, { status: 400 });
+      return NextResponse.json({ error: "Erro ao processar debug." }, { status: 500 });
     }
 
     const schema = await getMeetingSchema(token);
@@ -157,10 +161,7 @@ export async function GET(request: NextRequest) {
       },
       meetings: compactMeetings,
     });
-  } catch (err) {
-    return NextResponse.json(
-      { error: "Erro ao inspecionar R1", details: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+  } catch {
+    return NextResponse.json({ error: "Erro ao processar debug." }, { status: 500 });
   }
 }

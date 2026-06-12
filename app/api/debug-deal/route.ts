@@ -1,34 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
-import { getInternalUserAccessStatus } from "@/lib/access-control";
-
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
-}
+import { getManagedAccessDecision, isAdminAccess } from "@/lib/access-control";
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    const accessStatus = getInternalUserAccessStatus(session?.user?.email);
+    const decision = await getManagedAccessDecision(session?.user?.email);
 
-    if (accessStatus === "unauthenticated") {
+    if (decision.access === "unauthenticated") {
       return NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
     }
 
-    if (accessStatus === "forbidden") {
-      return NextResponse.json({ error: "Acesso restrito a usuários Galapos." }, { status: 403 });
+    if (!isAdminAccess(decision)) {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+  } catch {
+    return NextResponse.json({ error: "Erro ao validar acesso." }, { status: 500 });
+  }
+
+  try {
+    const dealId = request.nextUrl.searchParams.get("dealId")?.trim();
+    if (!dealId) {
+      return NextResponse.json({ error: "dealId é obrigatório." }, { status: 400 });
     }
 
     const token = process.env.HUBSPOT_PRIVATE_APP_TOKEN;
     if (!token) {
-      return NextResponse.json({ error: "Token do HubSpot não encontrado. Verifique o .env.local" }, { status: 500 });
-    }
-
-    const dealId = request.nextUrl.searchParams.get("dealId")?.trim();
-    if (!dealId) {
-      return NextResponse.json({ error: "dealId é obrigatório" }, { status: 400 });
+      return NextResponse.json({ error: "Erro ao processar debug." }, { status: 500 });
     }
 
     const props = [
@@ -57,10 +56,7 @@ export async function GET(request: NextRequest) {
 
     const text = await resp.text();
     if (!resp.ok) {
-      return NextResponse.json(
-        { error: `Falha no HubSpot (${resp.status})`, details: text.slice(0, 500) },
-        { status: resp.status }
-      );
+      return NextResponse.json({ error: "Erro ao processar debug." }, { status: 500 });
     }
 
     const deal = JSON.parse(text) as {
@@ -97,10 +93,7 @@ export async function GET(request: NextRequest) {
         stageLabel,
       },
     });
-  } catch (err: unknown) {
-    return NextResponse.json(
-      { error: "Erro ao inspecionar deal", details: getErrorMessage(err) },
-      { status: 500 }
-    );
+  } catch {
+    return NextResponse.json({ error: "Erro ao processar debug." }, { status: 500 });
   }
 }
