@@ -3,7 +3,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
-import { getInternalUserAccessStatus } from "@/lib/access-control";
+import { getManagedAccessDecision } from "@/lib/access-control";
+import type { ManagedAccessAllowedDecision } from "@/lib/access-control";
 
 type HubspotDeal = {
   id: string;
@@ -146,17 +147,20 @@ let metricsCache:
   | null = null;
 let refreshPromise: Promise<PartnerMetricsPayload> | null = null;
 
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
-}
-
 function normalizeText(value: string): string {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function normalizePartnerName(value: string): string {
+  return normalizeText(value).replace(/\s+/g, " ");
+}
+
+function isSamePartnerName(left: string, right: string): boolean {
+  return normalizePartnerName(left) === normalizePartnerName(right);
 }
 
 function splitServiceGroups(value: string | null | undefined): string[] {
@@ -1066,6 +1070,43 @@ function withSnapshotMeta(payload: PartnerMetricsPayload, generatedAt = ""): Par
   };
 }
 
+function uniqueDealIdCount(dealIds: string[]) {
+  return new Set(dealIds.map((dealId) => dealId.trim()).filter(Boolean)).size;
+}
+
+function applyManagedAccessScope(
+  payload: PartnerMetricsPayload,
+  decision: ManagedAccessAllowedDecision
+): PartnerMetricsPayload {
+  if (decision.role !== "partner" || !decision.partnerName) {
+    return payload;
+  }
+
+  const partnerMetrics = payload.partnerMetrics.filter((metric) =>
+    isSamePartnerName(metric.parceiro, decision.partnerName ?? "")
+  );
+  const serviceJourneyEvents = payload.serviceJourneyEvents.filter((event) =>
+    isSamePartnerName(event.parceiro, decision.partnerName ?? "")
+  );
+  const partnerDeals = partnerMetrics.flatMap((metric) => metric.deals);
+  const billingEntryCount = partnerDeals.filter((deal) => deal.faturamentoGalapos > 0 || deal.comissaoPaga > 0).length;
+
+  return {
+    ...payload,
+    partnerMetrics,
+    serviceJourneyEvents,
+    meta: {
+      ...payload.meta,
+      partnerCount: partnerMetrics.length,
+      dealCount: uniqueDealIdCount(partnerDeals.map((deal) => deal.dealId)),
+      serviceJourneyDealCount: uniqueDealIdCount(serviceJourneyEvents.map((event) => event.dealId)),
+      billingEntryCount,
+      accessScope: "partner",
+      partnerName: decision.partnerName,
+    },
+  };
+}
+
 function normalizeSnapshotPayload(payload: Partial<PartnerMetricsPayload> | null | undefined): PartnerMetricsPayload | null {
   if (!payload || !Array.isArray(payload.partnerMetrics)) return null;
   return {
@@ -1198,42 +1239,55 @@ export async function getPartnerMetricsPayload(options?: { refresh?: boolean }) 
 }
 
 export async function GET(request: Request) {
+  let decision: ManagedAccessAllowedDecision;
+
   try {
     const session = await getServerSession(authOptions);
-    const accessStatus = getInternalUserAccessStatus(session?.user?.email);
+    const accessDecision = await getManagedAccessDecision(session?.user?.email);
 
-    if (accessStatus === "unauthenticated") {
+    if (accessDecision.access === "unauthenticated") {
       return NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
     }
 
-    if (accessStatus === "forbidden") {
-      return NextResponse.json({ error: "Acesso restrito a usuários Galapos." }, { status: 403 });
+    if (accessDecision.access === "forbidden") {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
     }
 
+    decision = accessDecision;
+  } catch {
+    return NextResponse.json({ error: "Erro ao validar acesso." }, { status: 500 });
+  }
+
+  try {
     const url = new URL(request.url);
     const forceRefresh = url.searchParams.get("refresh") === "1";
+
+    if (forceRefresh && decision.role === "partner") {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+
     const payload = await getPartnerMetricsPayload({ refresh: forceRefresh });
-    return NextResponse.json(payload);
-  } catch (err: unknown) {
+    return NextResponse.json(applyManagedAccessScope(payload, decision));
+  } catch {
     const snapshot = await readSnapshot();
     if (snapshot) {
+      const scopedPayload = applyManagedAccessScope(
+        withSnapshotMeta(snapshot.payload, snapshot.generatedAt),
+        decision
+      );
       return NextResponse.json({
-        ...withSnapshotMeta(snapshot.payload, snapshot.generatedAt),
+        ...scopedPayload,
         meta: {
-          ...snapshot.payload.meta,
+          ...scopedPayload.meta,
           generatedAt: snapshot.generatedAt,
           generatedBy: snapshot.generatedBy,
           durationMs: snapshot.durationMs,
           stale: 1,
           fallbackFromError: 1,
-          fallbackError: getErrorMessage(err),
         },
       });
     }
-    return NextResponse.json(
-      { error: "Erro ao consolidar dados reais", details: getErrorMessage(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Erro ao consolidar dados reais" }, { status: 500 });
   }
 }
 
