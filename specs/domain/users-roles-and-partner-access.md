@@ -197,6 +197,10 @@ Não é suficiente esconder filtros ou menus no frontend.
 
 Mesmo que um usuário parceiro tente alterar query params, URLs ou chamadas de API manualmente, o backend deve restringir os dados ao parceiro associado ao usuário autenticado.
 
+O escopo de dados permitido deve ser determinado no servidor a partir do parceiro associado ao usuário autenticado. Identificadores, filtros ou nomes de parceiro enviados pelo frontend — incluindo query params, URL e identificadores no corpo da requisição, como `dealId` — não são fonte confiável de autorização e nunca devem definir, sozinhos, quais dados o usuário pode acessar.
+
+Quando uma requisição referenciar múltiplos itens e qualquer um deles estiver fora do escopo permitido do usuário, a requisição inteira deve falhar fechado e ser negada, sem retornar resultado parcial.
+
 Usuários autenticados, mas não cadastrados/gerenciados na persistência de acessos, devem ser bloqueados por padrão.
 
 Usuários inativos devem ser bloqueados em todas as páginas, APIs e ações, independentemente da camada.
@@ -357,6 +361,11 @@ Respostas esperadas para falhas de acesso:
 - `403`: usuário inativo.
 - `403`: usuário autenticado, mas não cadastrado/gerenciado na persistência de acessos.
 - `403`: usuário `Parceiro` sem associação válida a parceiro.
+
+Além das falhas de acesso acima, as APIs protegidas devem seguir o seguinte contrato de resposta:
+
+- `400`: requisição malformada (payload inválido).
+- `500`: erro técnico inesperado deve retornar resposta genérica, sem expor detalhes sensíveis, mensagens internas, tokens ou respostas brutas de integrações externas.
 
 ## Resumo de permissões por camada
 

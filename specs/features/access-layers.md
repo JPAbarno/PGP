@@ -228,6 +228,10 @@ O sistema não deve confiar apenas em query params enviados pelo frontend.
 
 Mesmo que o usuário tente alterar manualmente a URL, a API deve retornar apenas dados do parceiro associado ao usuário autenticado.
 
+O conjunto de dados permitido deve ser montado no servidor a partir do parceiro associado ao usuário autenticado. Identificadores enviados pelo frontend, incluindo identificadores no corpo da requisição como `dealId`, não são fonte confiável de autorização.
+
+Quando uma requisição referenciar múltiplos itens e qualquer um deles estiver fora do escopo do usuário, a requisição inteira deve falhar fechado e retornar `403`, sem resultado parcial.
+
 ### RF-009 — Permitir seleção de parceiro para Admin e Galapos
 
 Ao acessar o Portal do Assessor, usuários `Admin` e `Galapos` devem selecionar obrigatoriamente qualquer parceiro para visualização.
@@ -320,7 +324,9 @@ O sistema deve aplicar a seguinte política de resposta:
 - `403` para usuário autenticado sem permissão;
 - `403` para usuário inativo;
 - `403` para usuário autenticado, mas não cadastrado/gerenciado na persistência de acessos;
-- `403` para usuário `Parceiro` sem associação válida.
+- `403` para usuário `Parceiro` sem associação válida;
+- `400` para requisição malformada (payload inválido);
+- `500`, com resposta genérica, para erro técnico inesperado, sem expor detalhes sensíveis, mensagens internas, tokens ou respostas brutas de integrações externas.
 
 ## Requisitos não funcionais
 
