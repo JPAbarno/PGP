@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { authOptions } from "@/auth";
-import { getInternalUserAccessStatus } from "@/lib/access-control";
+import { getManagedAccessDecision } from "@/lib/access-control";
+import type { ManagedAccessAllowedDecision } from "@/lib/access-control";
 
 type DetailMetric = "r1" | "propostas" | "contratos" | "tcv" | "faturamento" | "comissao";
 
@@ -18,9 +21,128 @@ type DetailResponse = {
   }>;
 };
 
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
+type ParsedDetailRequest =
+  | { ok: true; metric: DetailMetric | null; dealIds: string[] }
+  | { ok: false; response: NextResponse };
+
+type PartnerMetricsSnapshotPayload = {
+  partnerMetrics: Array<{
+    parceiro?: string | null;
+    deals?: Array<{
+      dealId?: string | number | null;
+    }>;
+  }>;
+};
+
+type SnapshotEnvelope = {
+  payload?: Partial<PartnerMetricsSnapshotPayload> | null;
+};
+
+const DETAIL_METRICS = new Set<DetailMetric>(["r1", "propostas", "contratos", "tcv", "faturamento", "comissao"]);
+const SNAPSHOT_PATH = path.join(process.cwd(), "data", "partner-metrics-snapshot.json");
+
+function badRequest() {
+  return NextResponse.json({ error: "Payload inválido." }, { status: 400 });
+}
+
+function isDetailMetric(value: unknown): value is DetailMetric {
+  return typeof value === "string" && DETAIL_METRICS.has(value as DetailMetric);
+}
+
+function normalizeText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function normalizePartnerName(value: string): string {
+  return normalizeText(value).replace(/\s+/g, " ");
+}
+
+function isSamePartnerName(left: string, right: string): boolean {
+  return normalizePartnerName(left) === normalizePartnerName(right);
+}
+
+async function parseDetailRequest(request: NextRequest): Promise<ParsedDetailRequest> {
+  let body: unknown;
+
+  try {
+    body = await request.json();
+  } catch {
+    return { ok: false, response: badRequest() };
+  }
+
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, response: badRequest() };
+  }
+
+  const payload = body as { metric?: unknown; dealIds?: unknown };
+
+  if (payload.metric !== undefined && !isDetailMetric(payload.metric)) {
+    return { ok: false, response: badRequest() };
+  }
+
+  if (payload.dealIds !== undefined && !Array.isArray(payload.dealIds)) {
+    return { ok: false, response: badRequest() };
+  }
+
+  const metric = payload.metric === undefined ? null : payload.metric;
+  const rawDealIds = payload.dealIds ?? [];
+  const dealIds: string[] = [];
+
+  for (const rawDealId of rawDealIds) {
+    if (typeof rawDealId !== "string" && typeof rawDealId !== "number") {
+      return { ok: false, response: badRequest() };
+    }
+
+    const dealId = String(rawDealId).trim();
+    if (dealId) dealIds.push(dealId);
+  }
+
+  return {
+    ok: true,
+    metric,
+    dealIds: [...new Set(dealIds)],
+  };
+}
+
+function normalizeSnapshotPayload(payload: SnapshotEnvelope["payload"]): PartnerMetricsSnapshotPayload | null {
+  if (!payload || !Array.isArray(payload.partnerMetrics)) return null;
+
+  return {
+    partnerMetrics: payload.partnerMetrics,
+  };
+}
+
+async function getAllowedDealIdsForPartner(partnerName: string) {
+  const raw = await readFile(SNAPSHOT_PATH, "utf8");
+  const parsed = JSON.parse(raw) as SnapshotEnvelope;
+  const payload = normalizeSnapshotPayload(parsed.payload);
+
+  if (!payload) {
+    throw new Error("Partner metrics snapshot unavailable.");
+  }
+
+  const allowedDealIds = new Set<string>();
+
+  for (const partnerMetric of payload.partnerMetrics) {
+    if (!isSamePartnerName(String(partnerMetric.parceiro ?? ""), partnerName)) continue;
+
+    for (const deal of partnerMetric.deals ?? []) {
+      const dealId = String(deal.dealId ?? "").trim();
+      if (dealId) allowedDealIds.add(dealId);
+    }
+  }
+
+  return allowedDealIds;
+}
+
+async function isPartnerDealScopeAllowed(partnerName: string, dealIds: string[]) {
+  const allowedDealIds = await getAllowedDealIdsForPartner(partnerName);
+
+  return dealIds.every((dealId) => allowedDealIds.has(dealId));
 }
 
 async function hubspotFetch<T>(token: string, url: string, init?: RequestInit): Promise<T> {
@@ -112,29 +234,48 @@ async function fetchOwnerMap(token: string, ownerIds: string[]) {
 }
 
 export async function POST(request: NextRequest) {
+  let decision: ManagedAccessAllowedDecision;
+
   try {
     const session = await getServerSession(authOptions);
-    const accessStatus = getInternalUserAccessStatus(session?.user?.email);
+    const accessDecision = await getManagedAccessDecision(session?.user?.email);
 
-    if (accessStatus === "unauthenticated") {
+    if (accessDecision.access === "unauthenticated") {
       return NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
     }
 
-    if (accessStatus === "forbidden") {
-      return NextResponse.json({ error: "Acesso restrito a usuários Galapos." }, { status: 403 });
+    if (accessDecision.access === "forbidden") {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+
+    decision = accessDecision;
+  } catch {
+    return NextResponse.json({ error: "Erro ao validar acesso." }, { status: 500 });
+  }
+
+  try {
+    const parsedRequest = await parseDetailRequest(request);
+    if (!parsedRequest.ok) return parsedRequest.response;
+
+    if (!parsedRequest.metric || parsedRequest.dealIds.length === 0) {
+      return NextResponse.json({ details: [] satisfies DetailResponse["details"] });
+    }
+
+    const metric = parsedRequest.metric;
+    const dealIds = parsedRequest.dealIds;
+
+    if (decision.role === "partner") {
+      const partnerName = String(decision.partnerName ?? "").trim();
+      const isAllowed = partnerName ? await isPartnerDealScopeAllowed(partnerName, dealIds) : false;
+
+      if (!isAllowed) {
+        return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+      }
     }
 
     const token = process.env.HUBSPOT_PRIVATE_APP_TOKEN;
     if (!token) {
-      return NextResponse.json({ error: "Token do HubSpot não encontrado. Verifique o .env.local" }, { status: 500 });
-    }
-
-    const body = (await request.json()) as { metric?: DetailMetric; dealIds?: string[] };
-    const metric = body.metric;
-    const dealIds = [...new Set((body.dealIds ?? []).map((id) => String(id).trim()).filter(Boolean))];
-
-    if (!metric || dealIds.length === 0) {
-      return NextResponse.json({ details: [] satisfies DetailResponse["details"] });
+      return NextResponse.json({ error: "Erro ao carregar detalhes do parceiro" }, { status: 500 });
     }
 
     const properties = propertiesForMetric(metric);
@@ -151,10 +292,7 @@ export async function POST(request: NextRequest) {
     }));
 
     return NextResponse.json({ details } satisfies DetailResponse);
-  } catch (err: unknown) {
-    return NextResponse.json(
-      { error: "Erro ao carregar detalhes do parceiro", details: getErrorMessage(err) },
-      { status: 500 }
-    );
+  } catch {
+    return NextResponse.json({ error: "Erro ao carregar detalhes do parceiro" }, { status: 500 });
   }
 }
