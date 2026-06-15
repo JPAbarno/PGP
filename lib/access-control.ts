@@ -34,6 +34,10 @@ export type ManagedAccessDecision =
   | ManagedAccessForbiddenDecision
   | ManagedAccessAllowedDecision;
 
+export type PortalPartnerScopeResult =
+  | { ok: true; partnerName: string }
+  | { ok: false; status: 400 | 403; error: string };
+
 export function getAllowedEmailDomain() {
   const configuredDomain = process.env.ALLOWED_EMAIL_DOMAIN?.trim();
   const domain = configuredDomain || DEFAULT_ALLOWED_EMAIL_DOMAIN;
@@ -60,6 +64,56 @@ export function isCronAuthorized(request: Request) {
 
   const authHeader = request.headers.get("authorization") ?? "";
   return authHeader === `Bearer ${cronSecret}`;
+}
+
+export function normalizePartnerName(value: string): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+export function isSamePartnerName(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  return normalizePartnerName(String(a ?? "")) === normalizePartnerName(String(b ?? ""));
+}
+
+export function resolvePortalPartnerScope(
+  decision: ManagedAccessDecision,
+  requestedPartner?: string | null
+): PortalPartnerScopeResult {
+  const hasRequestedPartner = requestedPartner !== null && requestedPartner !== undefined;
+  const requestedPartnerName = String(requestedPartner ?? "").trim();
+
+  if (isAdminOrGalaposAccess(decision)) {
+    if (!requestedPartnerName) {
+      return { ok: false, status: 400, error: "Parceiro obrigatório." };
+    }
+
+    return { ok: true, partnerName: requestedPartnerName };
+  }
+
+  if (isPartnerAccess(decision)) {
+    const managedPartnerName = decision.partnerName.trim();
+
+    if (!managedPartnerName) {
+      return { ok: false, status: 403, error: "Acesso negado." };
+    }
+
+    if (!hasRequestedPartner) {
+      return { ok: true, partnerName: managedPartnerName };
+    }
+
+    if (isSamePartnerName(requestedPartnerName, managedPartnerName)) {
+      return { ok: true, partnerName: managedPartnerName };
+    }
+  }
+
+  return { ok: false, status: 403, error: "Acesso negado." };
 }
 
 function getManagedAccessScope(role: ManagedUserRole): ManagedAccessScope {

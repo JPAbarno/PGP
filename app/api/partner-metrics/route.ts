@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
-import { getManagedAccessDecision } from "@/lib/access-control";
+import { getManagedAccessDecision, isSamePartnerName } from "@/lib/access-control";
 import type { ManagedAccessAllowedDecision } from "@/lib/access-control";
 
 type HubspotDeal = {
@@ -153,14 +153,6 @@ function normalizeText(value: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
-}
-
-function normalizePartnerName(value: string): string {
-  return normalizeText(value).replace(/\s+/g, " ");
-}
-
-function isSamePartnerName(left: string, right: string): boolean {
-  return normalizePartnerName(left) === normalizePartnerName(right);
 }
 
 function splitServiceGroups(value: string | null | undefined): string[] {

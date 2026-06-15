@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { authOptions } from "@/auth";
-import { getManagedAccessDecision } from "@/lib/access-control";
+import { getManagedAccessDecision, isSamePartnerName } from "@/lib/access-control";
 import type { ManagedAccessAllowedDecision } from "@/lib/access-control";
 
 type DetailMetric = "r1" | "propostas" | "contratos" | "tcv" | "faturamento" | "comissao";
@@ -47,22 +47,6 @@ function badRequest() {
 
 function isDetailMetric(value: unknown): value is DetailMetric {
   return typeof value === "string" && DETAIL_METRICS.has(value as DetailMetric);
-}
-
-function normalizeText(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-function normalizePartnerName(value: string): string {
-  return normalizeText(value).replace(/\s+/g, " ");
-}
-
-function isSamePartnerName(left: string, right: string): boolean {
-  return normalizePartnerName(left) === normalizePartnerName(right);
 }
 
 async function parseDetailRequest(request: NextRequest): Promise<ParsedDetailRequest> {
