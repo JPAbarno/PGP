@@ -1,6 +1,5 @@
 import type { NextAuthOptions } from "next-auth";
 import AzureADProvider from "next-auth/providers/azure-ad";
-import { isAllowedEmail } from "@/lib/access-control";
 
 type MicrosoftProfile = {
   email?: string | null;
@@ -27,11 +26,6 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.AUTH_SECRET,
   callbacks: {
-    signIn({ profile, user }) {
-      const email = user.email ?? getProfileEmail(profile);
-
-      return isAllowedEmail(email) ? true : "/access-denied";
-    },
     jwt({ token, profile, user }) {
       token.email = user?.email ?? getProfileEmail(profile) ?? token.email;
 
