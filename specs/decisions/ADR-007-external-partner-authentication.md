@@ -111,3 +111,48 @@ Contradiz o requisito não funcional de `access-layers.md`: o middleware deve at
 - Fluxo de convite e onboarding de parceiros externos.
 - Tela de Gestão de Acessos na PGP.
 - Auditoria de acessos.
+
+## Resultado do teste manual pós-Fase 3
+
+**Data:** 2026-06-15
+
+### Contexto
+
+A Fase 3 foi implementada no commit `c37d6cc`. `auth.ts` e `middleware.ts` foram alterados para remover a restrição de domínio `@galapos.com.br`. Um teste manual foi realizado para verificar o fluxo de autenticação com usuário externo.
+
+### Achado
+
+O fluxo de login chegou corretamente ao Microsoft Entra ID. O login foi bloqueado com o erro **53003**, com a mensagem:
+
+> A entrada teve êxito, mas não corresponde aos critérios para acessar o recurso.
+
+O dispositivo utilizado apareceu como `Unregistered`.
+
+### Interpretação
+
+O erro 53003 é gerado pelo Entra ID quando a autenticação ocorre com sucesso, mas uma política de **Conditional Access** bloqueia o acesso ao recurso.
+
+Esse erro **não é falha da implementação da Fase 3**. Indica dependência operacional de configuração do tenant:
+
+- Conditional Access pode exigir dispositivo gerenciado ou registrado.
+- O App Registration pode estar configurado como single-tenant, bloqueando usuários externos de outros tenants.
+- O usuário externo pode não estar adicionado como Guest B2B no tenant Galapos.
+- O UPN/e-mail retornado pelo Entra ID após autenticação bem-sucedida pode diferir do e-mail cadastrado no Dataverse.
+
+### Status
+
+A implementação de código da Fase 3 está pronta. O teste real com parceiro externo fica pendente de ação operacional do administrador do tenant Galapos.
+
+Como o usuário de teste não é administrador do tenant, não foi possível consultar Sign-in logs, Conditional Access ou App Registration.
+
+### Próximos passos operacionais
+
+Para habilitar login externo real, o administrador do tenant Galapos deve:
+
+1. Consultar **Sign-in logs** no Entra ID e identificar qual política de Conditional Access bloqueou o login.
+2. Verificar se o usuário externo deve ser adicionado como **Guest B2B** no tenant Galapos (Opção A descrita acima).
+3. Verificar se o **App Registration** precisa ser alterado para multi-tenant ou se a estratégia será Guest B2B, multi-tenant ou provider adicional.
+4. Após autenticação bem-sucedida, validar qual **e-mail/UPN** chega ao token JWT.
+5. Garantir que o mesmo e-mail esteja cadastrado no Dataverse com camada `Parceiro`, status `ativo` e parceiro associado.
+
+Enquanto isso não for resolvido, testes reais com parceiro externo ficam bloqueados por dependência operacional, não por falha de código.
