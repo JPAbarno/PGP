@@ -4,6 +4,8 @@
 
 Aceita.
 
+A ADR-007 define a remoção parcial da restrição de domínio `@galapos.com.br` para suportar autenticação de parceiros externos. A implementação está pendente. A decisão de usar Auth.js/NextAuth com Microsoft Entra ID permanece válida.
+
 ## Contexto
 
 A PGP é uma plataforma interna da Galapos para análise de resultado e performance de parcerias.
@@ -20,9 +22,9 @@ A regra de produto permanece a mesma: a PGP deve ser acessível apenas por usuá
 
 Substituir o provider de autenticação de Google OAuth para Microsoft Entra ID/Azure AD, mantendo Auth.js/NextAuth como biblioteca de autenticação.
 
-A autenticação deve permitir login com conta Microsoft corporativa e bloquear usuários cujo e-mail não pertença ao domínio:
+A autenticação deve permitir login com conta Microsoft corporativa.
 
-- `@galapos.com.br`
+Na fase inicial, bloqueava usuários cujo e-mail não pertencesse ao domínio `@galapos.com.br`. A ADR-007 define a remoção dessa restrição na Fase 3 para suportar parceiros externos. Implementação pendente.
 
 ## Relação com decisões anteriores
 
@@ -33,9 +35,8 @@ A ADR-002 deve permanecer registrada como histórico da decisão inicial, mas se
 ## Regras de acesso mantidas
 
 - Usuários não autenticados não podem acessar páginas internas.
-- Usuários autenticados com e-mail `@galapos.com.br` podem acessar a aplicação.
-- Usuários autenticados com e-mail externo devem ser bloqueados.
-- A validação de domínio deve permanecer centralizada.
+- Auth.js/Entra ID continua responsável por autenticar a identidade do usuário.
+- A ADR-007 define a remoção da restrição de domínio `@galapos.com.br` do callback `signIn` e do middleware. A implementação da Fase 3 deverá realizar essa remoção. A autorização passará a ser responsabilidade do Dataverse via `getManagedAccessDecision()`.
 - APIs internas que retornam dados sensíveis devem continuar validando sessão ou segredo de serviço, conforme o caso.
 - O fluxo de cron com `CRON_SECRET` deve ser preservado.
 
@@ -102,13 +103,16 @@ Esses temas podem ser tratados em specs futuras.
 
 ## Evolução futura
 
-No futuro, a PGP poderá considerar:
+Evoluções já tratadas em ADRs e specs subsequentes:
 
-- acesso para assessores;
-- diferentes camadas de acesso;
-- perfis internos e externos;
-- permissões por tipo de usuário;
-- múltiplos providers de autenticação;
+- camadas de acesso `Admin`, `Galapos` e `Parceiro`: ADR-004 e `access-layers.md`.
+- persistência via Dataverse: ADR-006.
+- autenticação de parceiros externos com remoção da restrição de domínio: ADR-007.
+
+Ainda pendentes:
+
+- múltiplos providers de autenticação para parceiros sem conta Microsoft.
 - portal externo para parceiros ou assessores.
+- auditoria completa de acessos.
 
 Essas evoluções exigirão novas specs e ADRs antes de qualquer implementação.

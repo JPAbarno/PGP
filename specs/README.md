@@ -58,6 +58,8 @@ Antes de implementar qualquer nova funcionalidade ou alteração relevante, leia
 - `specs/decisions/ADR-003-authjs-microsoft-entra-id.md`
 - `specs/decisions/ADR-004-access-layer-model.md`
 - `specs/decisions/ADR-005-partner-portal-unification.md`
+- `specs/decisions/ADR-006-dataverse-access-persistence.md`
+- `specs/decisions/ADR-007-external-partner-authentication.md`
 
 ## Ordem recomendada de implementação
 

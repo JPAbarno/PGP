@@ -12,11 +12,22 @@ Nesta fase, a plataforma não será disponibilizada para parceiros externos, cli
 
 ## Regra principal
 
-Somente usuários autenticados com e-mail corporativo Galapos podem acessar a aplicação.
+Na fase inicial, somente usuários autenticados com e-mail corporativo Galapos podiam acessar a aplicação.
 
-Domínio permitido:
+Domínio permitido na fase inicial:
 
 - `@galapos.com.br`
+
+A ADR-007 define a evolução desta regra para a Fase 3, pendente de implementação.
+
+A regra passará a ser, após implementação da Fase 3:
+
+- Auth.js/Entra ID autentica a identidade do usuário.
+- O Dataverse decide a autorização via `getManagedAccessDecision()`.
+- O domínio de e-mail deixará de ser a fonte de autorização.
+- Usuário autenticado não cadastrado no Dataverse deverá ser bloqueado com `403`.
+- Usuário autenticado com status inativo deverá ser bloqueado com `403`.
+- Usuário `Parceiro` sem parceiro associado no Dataverse deverá ser bloqueado com `403`.
 
 ## Contexto atual
 
@@ -73,19 +84,23 @@ Usuário não autenticado não deve conseguir acessar páginas internas da aplic
 
 Ao tentar acessar uma página protegida, deve ser redirecionado para login ou receber uma tela de acesso apropriada.
 
-### RF-002 — Permitir apenas domínio Galapos
+### RF-002 — Permitir apenas domínio Galapos (substituído pela ADR-007)
 
-Usuário autenticado só pode acessar a plataforma se seu e-mail terminar com:
+Na fase inicial, o usuário autenticado só poderia acessar a plataforma se seu e-mail terminasse com `@galapos.com.br`.
 
-- `@galapos.com.br`
+A ADR-007 define a remoção dessa restrição do callback `signIn` do Auth.js e do middleware. A implementação da Fase 3 deverá realizar essa remoção. O Dataverse passará a ser a fonte de autorização.
 
-### RF-003 — Bloquear e-mails externos
+### RF-003 — Bloquear usuários não autorizados (evoluído pela ADR-007)
 
-Usuários autenticados com e-mails externos devem ser bloqueados.
+Na fase inicial, usuários com e-mails externos eram bloqueados por domínio no callback `signIn` e no middleware.
 
-A página de acesso negado deve exibir uma mensagem genérica.
+Na Fase 3, o bloqueio passará a ser responsabilidade do Dataverse, aplicado pelas APIs:
 
-Não deve revelar publicamente o motivo do bloqueio, o domínio exigido, detalhes de configuração ou qualquer distinção entre os casos de negação de acesso.
+- Usuários autenticados não cadastrados no Dataverse recebem `403`.
+- Usuários autenticados com status inativo recebem `403`.
+- Usuários `Parceiro` sem parceiro associado recebem `403`.
+
+A página de acesso negado deve exibir mensagem genérica, sem revelar o motivo do bloqueio, o domínio exigido, detalhes de configuração ou qualquer distinção entre os casos de negação.
 
 ### RF-004 — Proteger rotas de página
 
@@ -579,14 +594,19 @@ As etapas de implementação registraram execução bem-sucedida de:
 
 ## Evolução futura de acesso
 
-Os itens abaixo são fora do escopo atual e exigirão novas specs/ADRs antes de qualquer implementação:
+Evoluções já tratadas em fases e ADRs subsequentes:
 
-- acesso para assessores;
-- diferentes camadas de acesso;
-- perfis internos e externos;
-- permissões por tipo de usuário;
-- múltiplos providers de autenticação;
+- camadas de acesso `Admin`, `Galapos` e `Parceiro`: especificado em `access-layers.md` e ADR-004.
+- persistência de acessos via Dataverse: ADR-006.
+- autenticação de parceiros externos — remoção da restrição de domínio: decisão em ADR-007, implementação pendente.
+
+Ainda pendentes e fora do escopo atual:
+
+- múltiplos providers de autenticação para parceiros sem conta Microsoft.
 - portal externo para parceiros ou assessores.
+- auditoria completa de acessos.
+
+Essas evoluções exigirão novas specs e ADRs antes de qualquer implementação.
 
 ## Ordem sugerida de implementação
 
