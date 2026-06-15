@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
-import { getInternalUserAccessStatus, isCronAuthorized } from "@/lib/access-control";
+import { getManagedAccessDecision, isAdminOrGalaposAccess, isCronAuthorized } from "@/lib/access-control";
 import { refreshMetricsCache } from "../route";
 
 type RebuildAuthorization =
   | { ok: true; source: "cron" | "manual" }
   | { ok: false; response: NextResponse };
-
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
-}
 
 async function handleRebuild(source: string) {
   try {
@@ -22,12 +17,9 @@ async function handleRebuild(source: string) {
       partnerCount: payload.meta.partnerCount ?? 0,
       dealCount: payload.meta.dealCount ?? 0,
     });
-  } catch (err: unknown) {
+  } catch {
     return NextResponse.json(
-      {
-        error: "Erro ao reconstruir snapshot",
-        details: getErrorMessage(err),
-      },
+      { error: "Erro ao reconstruir snapshot." },
       { status: 500 }
     );
   }
@@ -38,24 +30,31 @@ async function authorizeRebuildRequest(request: Request): Promise<RebuildAuthori
     return { ok: true, source: "cron" as const };
   }
 
-  const session = await getServerSession(authOptions);
-  const accessStatus = getInternalUserAccessStatus(session?.user?.email);
+  try {
+    const session = await getServerSession(authOptions);
+    const decision = await getManagedAccessDecision(session?.user?.email);
 
-  if (accessStatus === "forbidden") {
+    if (decision.access === "unauthenticated") {
+      return {
+        ok: false,
+        response: NextResponse.json({ error: "Autenticação necessária." }, { status: 401 }),
+      };
+    }
+
+    if (!isAdminOrGalaposAccess(decision)) {
+      return {
+        ok: false,
+        response: NextResponse.json({ error: "Acesso negado." }, { status: 403 }),
+      };
+    }
+
+    return { ok: true, source: "manual" as const };
+  } catch {
     return {
       ok: false,
-      response: NextResponse.json({ error: "Acesso restrito a usuários Galapos." }, { status: 403 }),
+      response: NextResponse.json({ error: "Erro ao validar acesso." }, { status: 500 }),
     };
   }
-
-  if (accessStatus === "unauthenticated") {
-    return {
-      ok: false,
-      response: NextResponse.json({ error: "Autenticação necessária ou segredo inválido." }, { status: 401 }),
-    };
-  }
-
-  return { ok: true, source: "manual" as const };
 }
 
 export async function GET(request: Request) {
