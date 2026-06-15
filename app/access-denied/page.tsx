@@ -1,4 +1,19 @@
+import type { CSSProperties } from "react";
+
 export default function AccessDeniedPage() {
+  const actionStyle: CSSProperties = {
+    borderRadius: 999,
+    border: "1px solid rgba(255,193,48,0.35)",
+    background: "rgba(255,193,48,0.08)",
+    color: "#ffc130",
+    display: "inline-flex",
+    fontSize: 14,
+    fontWeight: 700,
+    marginTop: 20,
+    padding: "10px 16px",
+    textDecoration: "none",
+  };
+
   return (
     <main
       style={{
@@ -29,10 +44,13 @@ export default function AccessDeniedPage() {
         >
           Acesso restrito
         </div>
-        <h1 style={{ fontSize: 32, lineHeight: 1.1, marginBottom: 12 }}>Acesso restrito a usuários Galapos.</h1>
+        <h1 style={{ fontSize: 32, lineHeight: 1.1, marginBottom: 12 }}>Não foi possível liberar seu acesso a esta área.</h1>
         <p style={{ color: "#9ca3af", fontSize: 15, lineHeight: 1.6 }}>
-          Use uma conta corporativa com e-mail @galapos.com.br para acessar a PGP.
+          Se você acredita que deveria ter acesso, entre em contato com o responsável pelo sistema.
         </p>
+        <a href="/dashboard" style={actionStyle}>
+          Tentar novamente
+        </a>
       </section>
     </main>
   );

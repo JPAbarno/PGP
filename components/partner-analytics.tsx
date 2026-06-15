@@ -28,6 +28,12 @@ type HoveredParetoDetails = {
 } | null;
 type DetailMetaMap = Record<string, { service: string; responsavel: string }>;
 
+const DETAIL_LOAD_ERROR_MESSAGE = "Não foi possível carregar detalhes adicionais agora.";
+
+function isAccessDeniedStatus(status: number) {
+  return status === 401 || status === 403;
+}
+
 const metricOptions: Array<{ value: FilterState["sortBy"]; label: string }> = [
   { value: "reunioesRealizadas", label: "Reuniões realizadas" },
   { value: "propostasEnviadas", label: "Propostas enviadas" },
@@ -1072,6 +1078,7 @@ export function MeetingJourneyTable({
     metric: ServiceJourneyEvent["metric"];
   } | null>(null);
   const [ownerDetails, setOwnerDetails] = useState<Record<string, string>>({});
+  const [ownerDetailsError, setOwnerDetailsError] = useState("");
 
   const tableFilters = useMemo(
     () => ({
@@ -1254,8 +1261,14 @@ export function MeetingJourneyTable({
             dealIds: missingOwnerIds,
           }),
         });
-        const payload = (await resp.json()) as { details?: Array<{ dealId: string; responsavel: string }> };
-        if (!resp.ok || cancelled) return;
+        const payload = (await resp.json().catch(() => ({}))) as { details?: Array<{ dealId: string; responsavel: string }> };
+        if (!resp.ok || cancelled) {
+          if (!cancelled) {
+            setOwnerDetailsError(DETAIL_LOAD_ERROR_MESSAGE);
+            if (isAccessDeniedStatus(resp.status)) setOwnerDetails({});
+          }
+          return;
+        }
 
         const next = Object.fromEntries(
           (payload.details ?? [])
@@ -1266,8 +1279,9 @@ export function MeetingJourneyTable({
         if (Object.keys(next).length > 0) {
           setOwnerDetails((current) => ({ ...current, ...next }));
         }
+        setOwnerDetailsError("");
       } catch {
-        // deixa fallback visual
+        if (!cancelled) setOwnerDetailsError(DETAIL_LOAD_ERROR_MESSAGE);
       }
     }
 
@@ -1289,13 +1303,14 @@ export function MeetingJourneyTable({
     return (
       <button
         type="button"
-        onClick={() =>
+        onClick={() => {
+          setOwnerDetailsError("");
           setSelectedCell((current) =>
             current?.grupoServico === grupoServico && current?.metric === metric
               ? null
               : { grupoServico, metric }
-          )
-        }
+          );
+        }}
         style={{
           background: isActive ? "rgba(255,193,48,0.12)" : "transparent",
           color: "#F5F5F5",
@@ -1494,6 +1509,20 @@ export function MeetingJourneyTable({
               Fechar detalhamento
             </button>
           </div>
+          {ownerDetailsError && (
+            <div
+              style={{
+                border: "1px solid rgba(255,193,48,0.22)",
+                borderRadius: 12,
+                background: "rgba(255,193,48,0.08)",
+                color: "#f5d78e",
+                fontSize: 13,
+                padding: "10px 12px",
+              }}
+            >
+              {ownerDetailsError}
+            </div>
+          )}
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 880 }}>
               <thead>
@@ -1555,6 +1584,7 @@ export function PartnerAnalytics({
   const [hoveredDetails, setHoveredDetails] = useState<HoveredParetoDetails>(null);
   const [pinnedDetails, setPinnedDetails] = useState<HoveredParetoDetails>(null);
   const [detailCache, setDetailCache] = useState<Record<string, DetailMetaMap>>({});
+  const [detailErrorCache, setDetailErrorCache] = useState<Record<string, string>>({});
   const availableYears = useMemo(
     () =>
       [...new Set(data.flatMap((partner) => partner.deals.map((deal) => new Date(deal.activityDate).getUTCFullYear())))]
@@ -1617,8 +1647,20 @@ export function PartnerAnalytics({
             dealIds: hovered.deals.map((deal) => deal.dealId),
           }),
         });
-        const payload = (await resp.json()) as { details?: Array<{ dealId: string; service: string; responsavel: string }> };
-        if (!resp.ok || cancelled) return;
+        const payload = (await resp.json().catch(() => ({}))) as { details?: Array<{ dealId: string; service: string; responsavel: string }> };
+        if (!resp.ok || cancelled) {
+          if (!cancelled) {
+            setDetailCache((current) => ({
+              ...(isAccessDeniedStatus(resp.status) ? {} : current),
+              [hoveredKey]: {},
+            }));
+            setDetailErrorCache((current) => ({
+              ...(isAccessDeniedStatus(resp.status) ? {} : current),
+              [hoveredKey]: DETAIL_LOAD_ERROR_MESSAGE,
+            }));
+          }
+          return;
+        }
 
         const nextMap = Object.fromEntries(
           (payload.details ?? []).map((item) => [
@@ -1627,9 +1669,15 @@ export function PartnerAnalytics({
           ])
         );
         setDetailCache((current) => ({ ...current, [hoveredKey]: nextMap }));
+        setDetailErrorCache((current) => {
+          const next = { ...current };
+          delete next[hoveredKey];
+          return next;
+        });
       } catch {
         if (cancelled) return;
         setDetailCache((current) => ({ ...current, [hoveredKey]: {} }));
+        setDetailErrorCache((current) => ({ ...current, [hoveredKey]: DETAIL_LOAD_ERROR_MESSAGE }));
       }
     }
 
@@ -1681,8 +1729,13 @@ export function PartnerAnalytics({
             {activeDetails.summaryLabel}
             {pinnedDetails && <span style={{ marginLeft: 8, color: "#FFC130" }}>fixado</span>}
           </div>
-          {!detailCache[hoveredKey] && (
+          {!detailCache[hoveredKey] && !detailErrorCache[hoveredKey] && (
             <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>Carregando detalhamento...</div>
+          )}
+          {detailErrorCache[hoveredKey] && (
+            <div style={{ fontSize: 12, color: "#f5d78e", marginBottom: 12 }}>
+              {detailErrorCache[hoveredKey]}
+            </div>
           )}
           <div style={{ display: "grid", gap: 10 }}>
             {activeDetails.deals.map((deal) => {

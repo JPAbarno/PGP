@@ -1,19 +1,15 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { PartnerAnalytics } from "@/components/partner-analytics";
-import {
-  partnerMetrics as mockPartnerMetrics,
-  serviceJourneyEvents as mockServiceJourneyEvents,
-  type PartnerMetric,
-  type ServiceJourneyEvent,
-} from "@/lib/mock-data";
+import type { PartnerMetric, ServiceJourneyEvent } from "@/lib/mock-data";
+
+type LoadStatus = "loading" | "ready" | "unauthenticated" | "forbidden" | "load_error";
 
 type ApiResponse = {
   partnerMetrics?: PartnerMetric[];
   serviceJourneyEvents?: ServiceJourneyEvent[];
-  error?: string;
-  details?: string;
   meta?: {
     stale?: number;
     generatedAt?: string;
@@ -35,11 +31,82 @@ type CacheEnvelope = {
 };
 
 const CACHE_KEY = "analise-parceiros.partner-metrics.v11";
+const AUTH_REQUIRED_MESSAGE = "Sua sessão não está ativa. Faça login novamente para continuar.";
+const FORBIDDEN_MESSAGE = "Você não tem permissão para acessar esta área.";
+const LOAD_ERROR_MESSAGE = "Não foi possível carregar os dados agora. Tente novamente mais tarde.";
+
+async function readApiPayload(response: Response): Promise<ApiResponse> {
+  return response.json().catch(() => ({}));
+}
+
+function loadStatusFromHttpStatus(status: number): Exclude<LoadStatus, "loading" | "ready"> {
+  if (status === 401) return "unauthenticated";
+  if (status === 403) return "forbidden";
+  return "load_error";
+}
+
+function messageFromLoadStatus(status: LoadStatus) {
+  if (status === "unauthenticated") return AUTH_REQUIRED_MESSAGE;
+  if (status === "forbidden") return FORBIDDEN_MESSAGE;
+  return LOAD_ERROR_MESSAGE;
+}
+
+function clearPartnerMetricsCache() {
+  try {
+    window.sessionStorage.removeItem(CACHE_KEY);
+  } catch {
+    // Ignore storage availability issues.
+  }
+}
+
+function StatusCard({
+  eyebrow,
+  message,
+  action,
+}: {
+  eyebrow: string;
+  message: string;
+  action?: { href: string; label: string };
+}) {
+  const cardStyle: CSSProperties = {
+    padding: 24,
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 100%)",
+    color: "#d1d5db",
+  };
+  const actionStyle: CSSProperties = {
+    borderRadius: 999,
+    border: "1px solid rgba(255,193,48,0.35)",
+    background: "rgba(255,193,48,0.08)",
+    color: "#ffc130",
+    display: "inline-flex",
+    fontSize: 14,
+    fontWeight: 700,
+    marginTop: 16,
+    padding: "10px 16px",
+    textDecoration: "none",
+  };
+
+  return (
+    <section style={cardStyle}>
+      <div style={{ color: "#ffc130", fontSize: 12, fontWeight: 700, letterSpacing: "0.12em", marginBottom: 10, textTransform: "uppercase" }}>
+        {eyebrow}
+      </div>
+      <div style={{ color: "#f8fafc", fontSize: 18, fontWeight: 700, marginBottom: 6 }}>{message}</div>
+      {action && (
+        <a href={action.href} style={actionStyle}>
+          {action.label}
+        </a>
+      )}
+    </section>
+  );
+}
 
 export function PartnerAnalyticsLoader() {
   const [data, setData] = useState<PartnerMetric[] | null>(null);
   const [, setServiceJourneyEvents] = useState<ServiceJourneyEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
   const [error, setError] = useState<string>("");
   const [staleData, setStaleData] = useState(false);
   const [generatedAt, setGeneratedAt] = useState("");
@@ -49,84 +116,92 @@ export function PartnerAnalyticsLoader() {
   const [dealCount, setDealCount] = useState(0);
   const [rebuilding, setRebuilding] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    let hasCachedData = false;
+  const resetLoadedData = useCallback(() => {
+    setData(null);
+    setServiceJourneyEvents([]);
+    setStaleData(false);
+    setGeneratedAt("");
+    setGeneratedBy("");
+    setDurationMs(0);
+    setPartnerCount(0);
+    setDealCount(0);
+  }, []);
+
+  const persistAuthorizedPayload = useCallback((payload: ApiResponse) => {
+    const nextData = payload.partnerMetrics ?? [];
+    const nextServiceJourneyEvents = payload.serviceJourneyEvents ?? [];
+    const nextGeneratedAt = String(payload.meta?.generatedAt ?? "");
+    const nextGeneratedBy = String(payload.meta?.generatedBy ?? "");
+    const nextDurationMs = Number(payload.meta?.durationMs ?? 0);
+    const nextPartnerCount = Number(payload.meta?.partnerCount ?? nextData.length);
+    const nextDealCount = Number(payload.meta?.dealCount ?? 0);
+
+    setData(nextData);
+    setServiceJourneyEvents(nextServiceJourneyEvents);
+    setStaleData(Boolean(payload.meta?.stale));
+    setGeneratedAt(nextGeneratedAt);
+    setGeneratedBy(nextGeneratedBy);
+    setDurationMs(nextDurationMs);
+    setPartnerCount(nextPartnerCount);
+    setDealCount(nextDealCount);
+    setLoadStatus("ready");
 
     try {
-      const cached = window.sessionStorage.getItem(CACHE_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached) as CacheEnvelope;
-        if (Array.isArray(parsed?.partnerMetrics) && parsed.partnerMetrics.length > 0) {
-          hasCachedData = true;
-          setData(parsed.partnerMetrics);
-          setServiceJourneyEvents(Array.isArray(parsed.serviceJourneyEvents) ? parsed.serviceJourneyEvents : []);
-          setGeneratedAt(parsed.generatedAt ?? "");
-          setGeneratedBy(parsed.generatedBy ?? "");
-          setDurationMs(parsed.durationMs ?? 0);
-          setPartnerCount(parsed.partnerCount ?? parsed.partnerMetrics.length);
-          setDealCount(parsed.dealCount ?? 0);
-          setLoading(false);
-        }
-      }
+      window.sessionStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({
+          partnerMetrics: nextData,
+          serviceJourneyEvents: nextServiceJourneyEvents,
+          generatedAt: nextGeneratedAt,
+          generatedBy: nextGeneratedBy,
+          durationMs: nextDurationMs,
+          partnerCount: nextPartnerCount,
+          dealCount: nextDealCount,
+        } satisfies CacheEnvelope)
+      );
     } catch {
-      // Ignore malformed session cache and continue with network fetch.
+      // Ignore session cache write issues.
+    }
+  }, []);
+
+  const applyMetricsLoadFailure = useCallback((status: number) => {
+    const nextStatus = loadStatusFromHttpStatus(status);
+
+    if (status === 401 || status === 403) {
+      clearPartnerMetricsCache();
     }
 
+    resetLoadedData();
+    setError(messageFromLoadStatus(nextStatus));
+    setLoadStatus(nextStatus);
+  }, [resetLoadedData]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     async function load() {
-      if (!hasCachedData) setLoading(true);
+      setLoadStatus("loading");
       setError("");
+      resetLoadedData();
 
       try {
         const resp = await fetch("/api/partner-metrics", { cache: "no-store" });
-        const payload = (await resp.json()) as ApiResponse;
+        const payload = await readApiPayload(resp);
 
         if (!resp.ok) {
-          throw new Error(payload.details || payload.error || "Falha ao carregar dados reais.");
+          if (!cancelled) applyMetricsLoadFailure(resp.status);
+          return;
         }
 
         if (!cancelled) {
-          const nextData = payload.partnerMetrics ?? [];
-          const nextServiceJourneyEvents = payload.serviceJourneyEvents ?? [];
-          const nextGeneratedAt = String(payload.meta?.generatedAt ?? "");
-          const nextGeneratedBy = String(payload.meta?.generatedBy ?? "");
-          const nextDurationMs = Number(payload.meta?.durationMs ?? 0);
-          const nextPartnerCount = Number(payload.meta?.partnerCount ?? nextData.length);
-          const nextDealCount = Number(payload.meta?.dealCount ?? 0);
-          setData(nextData);
-          setServiceJourneyEvents(nextServiceJourneyEvents);
-          setStaleData(Boolean(payload.meta?.stale));
-          setGeneratedAt(nextGeneratedAt);
-          setGeneratedBy(nextGeneratedBy);
-          setDurationMs(nextDurationMs);
-          setPartnerCount(nextPartnerCount);
-          setDealCount(nextDealCount);
-          try {
-            window.sessionStorage.setItem(
-              CACHE_KEY,
-              JSON.stringify({
-                partnerMetrics: nextData,
-                serviceJourneyEvents: nextServiceJourneyEvents,
-                generatedAt: nextGeneratedAt,
-                generatedBy: nextGeneratedBy,
-                durationMs: nextDurationMs,
-                partnerCount: nextPartnerCount,
-                dealCount: nextDealCount,
-              } satisfies CacheEnvelope)
-            );
-          } catch {
-            // Ignore sessionStorage quota/cache issues.
-          }
+          persistAuthorizedPayload(payload);
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
-          const message = err instanceof Error ? err.message : String(err);
-          setError(message);
-          setData((current) => current ?? mockPartnerMetrics);
-          setServiceJourneyEvents((current) => current.length > 0 ? current : mockServiceJourneyEvents);
+          resetLoadedData();
+          setError(LOAD_ERROR_MESSAGE);
+          setLoadStatus("load_error");
         }
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     }
 
@@ -134,7 +209,7 @@ export function PartnerAnalyticsLoader() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [applyMetricsLoadFailure, persistAuthorizedPayload, resetLoadedData]);
 
   async function rebuildSnapshot() {
     setRebuilding(true);
@@ -145,53 +220,29 @@ export function PartnerAnalyticsLoader() {
         method: "POST",
         cache: "no-store",
       });
-      const rebuildPayload = (await rebuildResp.json()) as ApiResponse;
+      await readApiPayload(rebuildResp);
 
       if (!rebuildResp.ok) {
-        throw new Error(rebuildPayload.details || rebuildPayload.error || "Falha ao reconstruir snapshot.");
+        if (rebuildResp.status === 401 || rebuildResp.status === 403) {
+          applyMetricsLoadFailure(rebuildResp.status);
+          return;
+        }
+
+        setError(LOAD_ERROR_MESSAGE);
+        return;
       }
 
       const resp = await fetch("/api/partner-metrics?refresh=1", { cache: "no-store" });
-      const payload = (await resp.json()) as ApiResponse;
+      const payload = await readApiPayload(resp);
 
       if (!resp.ok) {
-        throw new Error(payload.details || payload.error || "Falha ao recarregar snapshot.");
+        applyMetricsLoadFailure(resp.status);
+        return;
       }
 
-      const nextData = payload.partnerMetrics ?? [];
-      const nextServiceJourneyEvents = payload.serviceJourneyEvents ?? [];
-      const nextGeneratedAt = String(payload.meta?.generatedAt ?? "");
-      const nextGeneratedBy = String(payload.meta?.generatedBy ?? "");
-      const nextDurationMs = Number(payload.meta?.durationMs ?? 0);
-      const nextPartnerCount = Number(payload.meta?.partnerCount ?? nextData.length);
-      const nextDealCount = Number(payload.meta?.dealCount ?? 0);
-      setData(nextData);
-      setServiceJourneyEvents(nextServiceJourneyEvents);
-      setStaleData(Boolean(payload.meta?.stale));
-      setGeneratedAt(nextGeneratedAt);
-      setGeneratedBy(nextGeneratedBy);
-      setDurationMs(nextDurationMs);
-      setPartnerCount(nextPartnerCount);
-      setDealCount(nextDealCount);
-
-      try {
-        window.sessionStorage.setItem(
-          CACHE_KEY,
-          JSON.stringify({
-            partnerMetrics: nextData,
-            serviceJourneyEvents: nextServiceJourneyEvents,
-            generatedAt: nextGeneratedAt,
-            generatedBy: nextGeneratedBy,
-            durationMs: nextDurationMs,
-            partnerCount: nextPartnerCount,
-            dealCount: nextDealCount,
-          } satisfies CacheEnvelope)
-        );
-      } catch {
-        // Ignore session cache write issues.
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      persistAuthorizedPayload(payload);
+    } catch {
+      setError(LOAD_ERROR_MESSAGE);
     } finally {
       setRebuilding(false);
     }
@@ -214,7 +265,7 @@ export function PartnerAnalyticsLoader() {
             ? "carga fria"
             : generatedBy || "desconhecido";
 
-  if (loading && !data) {
+  if (loadStatus === "loading") {
     return (
       <section
         style={{
@@ -227,6 +278,30 @@ export function PartnerAnalyticsLoader() {
       >
         Carregando dados reais de HubSpot + BI...
       </section>
+    );
+  }
+
+  if (loadStatus === "unauthenticated") {
+    return (
+      <StatusCard
+        eyebrow="Sessão necessária"
+        message={error || AUTH_REQUIRED_MESSAGE}
+        action={{ href: "/api/auth/signin", label: "Fazer login" }}
+      />
+    );
+  }
+
+  if (loadStatus === "forbidden") {
+    return <StatusCard eyebrow="Acesso não liberado" message={error || FORBIDDEN_MESSAGE} />;
+  }
+
+  if (loadStatus === "load_error" || !data) {
+    return (
+      <StatusCard
+        eyebrow="Erro ao carregar"
+        message={error || LOAD_ERROR_MESSAGE}
+        action={{ href: "/dashboard", label: "Tentar novamente" }}
+      />
     );
   }
 
@@ -281,8 +356,8 @@ export function PartnerAnalyticsLoader() {
             color: "#fecaca",
           }}
         >
-          Falha ao carregar dados reais. Exibindo base mockada por enquanto.
-          <div style={{ marginTop: 6, color: "#fca5a5", fontSize: 13 }}>{error}</div>
+          Não foi possível concluir a atualização agora.
+          <div style={{ marginTop: 6, color: "#fca5a5", fontSize: 13 }}>{error || LOAD_ERROR_MESSAGE}</div>
         </section>
       )}
       {!error && staleData && (
@@ -299,21 +374,7 @@ export function PartnerAnalyticsLoader() {
           Exibindo o último snapshot disponível enquanto a base real é reprocessada.
         </section>
       )}
-      {!error && loading && data && (
-        <section
-          style={{
-            padding: 14,
-            borderRadius: 16,
-            border: "1px solid rgba(255,255,255,0.08)",
-            background: "rgba(255,255,255,0.03)",
-            color: "#9ca3af",
-            fontSize: 13,
-          }}
-        >
-          Atualizando dados reais de HubSpot + BI...
-        </section>
-      )}
-      <PartnerAnalytics data={data ?? mockPartnerMetrics} />
+      <PartnerAnalytics data={data} />
     </div>
   );
 }
