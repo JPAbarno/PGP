@@ -223,16 +223,26 @@ O filtro por parceiro não pode depender apenas de query params enviados pelo fr
 
 Para usuários `Admin` e `Galapos`:
 
-- o backend pode aceitar parceiro selecionado obrigatoriamente na interface;
-- esses usuários podem visualizar qualquer parceiro.
+- o parceiro selecionado é passado às APIs via query param `?parceiro=` na URL da requisição;
+- o backend aceita qualquer valor de parceiro enviado por usuários com escopo `all`;
+- o query param `?parceiro=` é mecanismo de seleção de contexto de visualização, não de autorização.
 
 Para usuários `Parceiro`:
 
 - o backend deve validar o parceiro enviado por query param, se houver;
-- o parceiro permitido deve ser derivado da associação do usuário autenticado;
+- o parceiro permitido deve ser derivado da associação do usuário autenticado no Dataverse;
 - a API deve retornar apenas dados do parceiro associado ao usuário;
 - tentativa de acessar outro parceiro deve retornar `403`;
-- o sistema não deve ignorar silenciosamente query param divergente.
+- o sistema não deve ignorar silenciosamente query param divergente;
+- o query param `?parceiro=` nunca é fonte de autorização para `Parceiro` — o parceiro é sempre resolvido a partir do Dataverse.
+
+### Resolução stateless de parceiro selecionado
+
+O estado de seleção de parceiro para `Admin` e `Galapos` é stateless: é resolvido por request no servidor, a partir do query param `?parceiro=` recebido.
+
+O parceiro selecionado não é armazenado em sessão server-side, cookie de autorização nem em estado client-side com valor de autorização.
+
+O frontend mantém o parceiro selecionado no estado da interface e o propaga em cada requisição via query param. A cada request, o backend resolve o parceiro a partir do query param para `Admin` e `Galapos`, e a partir do Dataverse para `Parceiro`.
 
 ## Comportamento por camada
 

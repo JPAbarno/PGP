@@ -362,7 +362,9 @@ Não deve expor:
 - Rotas e APIs de debug devem ser protegidas no servidor e restritas a `Admin`.
 - Configurações em modo leitura não devem expor secrets, tokens, credenciais ou variáveis sensíveis.
 - Middleware deve atuar exclusivamente como barreira leve de autenticação e navegação, sem consultar o Dataverse.
-- A consulta ao Dataverse para determinação de função e status do usuário deve ocorrer nas API routes, conforme definido na ADR-006.
+- A consulta ao Dataverse para determinação de função e status do usuário deve ocorrer nas API routes e em páginas server-side que aplicam gate de camada, conforme definido na ADR-006.
+- Páginas que restringem acesso por camada — como `/dashboard`, acessível apenas a `Admin` e `Galapos` — devem aplicar gate server-side via `getManagedAccessDecision()` no próprio Server Component, redirecionando ou retornando acesso negado para camadas não autorizadas. O middleware não faz esse controle porque não consulta o Dataverse.
+- O matcher do middleware deve incluir `/portal-assessor/:path*` além de `/dashboard/:path*`, garantindo que a presença de sessão seja verificada em ambas as áreas protegidas.
 
 ## Persistência
 
