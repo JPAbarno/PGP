@@ -328,6 +328,28 @@ O sistema deve aplicar a seguinte política de resposta:
 - `400` para requisição malformada (payload inválido);
 - `500`, com resposta genérica, para erro técnico inesperado, sem expor detalhes sensíveis, mensagens internas, tokens ou respostas brutas de integrações externas.
 
+### RF-019 — Comportamento do frontend em respostas de APIs protegidas
+
+Componentes client-side não devem renderizar dados protegidos antes de receber resposta `200` autorizada de uma API protegida.
+
+Cache client-side, sessionStorage, fallback local ou mock não devem ser usados para mascarar respostas `401`, `403` ou `500` de APIs protegidas.
+
+Em `401` ou `403`: o frontend deve limpar ou ignorar cache relevante e não exibir dados anteriores à falha de autorização.
+
+Em `500`: o frontend deve exibir mensagem genérica de indisponibilidade sem detalhes técnicos da falha.
+
+### RF-020 — Página /access-denied genérica
+
+A página `/access-denied` não deve diferenciar publicamente entre os motivos de negação de acesso.
+
+Não deve expor:
+
+- se o usuário está cadastrado ou não;
+- se o usuário está inativo;
+- se falta associação a parceiro;
+- a camada ou função do usuário;
+- detalhes do Dataverse ou de qualquer configuração interna.
+
 ## Requisitos não funcionais
 
 - As regras de acesso devem ser aplicadas no servidor.
@@ -339,6 +361,8 @@ O sistema deve aplicar a seguinte política de resposta:
 - A plataforma deve continuar compatível com Auth.js/NextAuth.
 - Rotas e APIs de debug devem ser protegidas no servidor e restritas a `Admin`.
 - Configurações em modo leitura não devem expor secrets, tokens, credenciais ou variáveis sensíveis.
+- Middleware deve atuar exclusivamente como barreira leve de autenticação e navegação, sem consultar o Dataverse.
+- A consulta ao Dataverse para determinação de função e status do usuário deve ocorrer nas API routes, conforme definido na ADR-006.
 
 ## Persistência
 
@@ -394,7 +418,10 @@ A feature será considerada pronta quando:
 - remoção de acesso inativar o usuário sem deletar o registro;
 - um `Admin` não conseguir inativar, remover ou rebaixar a si mesmo;
 - o sistema não permitir remover, inativar ou rebaixar o último `Admin` ativo;
-- respostas de acesso seguirem a política `401`/`403` definida nesta spec.
+- respostas de acesso seguirem a política `401`/`403` definida nesta spec;
+- componentes client-side não renderizarem dados protegidos antes de resposta `200` autorizada;
+- frontend não usar cache, sessionStorage ou fallback local para mascarar respostas `401`, `403` ou `500` de APIs protegidas;
+- página `/access-denied` exibir mensagem genérica sem diferenciar motivos de negação.
 
 ## Dependências
 
@@ -404,7 +431,8 @@ Esta feature depende de:
 - domínio de usuários e camadas documentado em `/specs/domain/users-roles-and-partner-access.md`;
 - futura decisão sobre tecnologia de persistência;
 - futura implementação da Gestão de Acessos;
-- futura unificação do Portal do Assessor.
+- futura unificação do Portal do Assessor;
+- revisão da lógica de validação de domínio `@galapos.com.br` atualmente presente em `auth.ts` e `middleware.ts`, que deve ser evoluída para o modelo de camadas definido nesta feature.
 
 ## Ordem sugerida de implementação
 

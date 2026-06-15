@@ -83,9 +83,9 @@ Usuário autenticado só pode acessar a plataforma se seu e-mail terminar com:
 
 Usuários autenticados com e-mails externos devem ser bloqueados.
 
-O sistema deve apresentar uma mensagem clara, por exemplo:
+A página de acesso negado deve exibir uma mensagem genérica.
 
-> Acesso restrito a usuários Galapos.
+Não deve revelar publicamente o motivo do bloqueio, o domínio exigido, detalhes de configuração ou qualquer distinção entre os casos de negação de acesso.
 
 ### RF-004 — Proteger rotas de página
 
