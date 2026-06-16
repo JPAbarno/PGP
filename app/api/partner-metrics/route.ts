@@ -41,6 +41,15 @@ type ContractDealMeta = {
   dealName: string;
 };
 
+type ContractMetric = {
+  dealId: string;
+  dealName: string;
+  parceiro: string;
+  closeDate: string | null;
+  createDate: string | null;
+  status: string;
+};
+
 type BillingEntry = {
   dealId: string;
   faturamento: number;
@@ -110,6 +119,7 @@ type MeetingTypeInfo = {
 type PartnerMetricsPayload = {
   partnerMetrics: PartnerMetric[];
   serviceJourneyEvents: ServiceJourneyEvent[];
+  contractMetrics: ContractMetric[];
   meta: Record<string, string | number>;
 };
 
@@ -135,7 +145,7 @@ const R1_MEETING_TYPE_LABEL = "1ª Reunião - Investigação";
 const B2B_CANAL_VALUE = "b2b";
 const RESPONSE_CACHE_TTL_MS = 10 * 60 * 1000;
 const MEETING_ASSOCIATION_CONCURRENCY = 8;
-const CACHE_VERSION = 11;
+const CACHE_VERSION = 12;
 const SNAPSHOT_PATH = path.join(process.cwd(), "data", "partner-metrics-snapshot.json");
 
 let metricsCache:
@@ -742,9 +752,10 @@ export async function buildMetricsPayload() {
       throw new Error("Token do HubSpot não encontrado. Verifique o .env.local");
     }
 
-    const [stageMap, journeyStageMap, deals] = await Promise.all([
+    const [stageMap, journeyStageMap, contractStageMap, deals] = await Promise.all([
       getStageMap(hubspotToken, PIPELINE_ID),
       getStageMap(hubspotToken, TIER_PIPELINE_ID),
+      getStageMap(hubspotToken, CONTRACTS_PIPELINE_ID),
       fetchAllDealsByPipeline(
         hubspotToken,
         PIPELINE_ID,
@@ -772,7 +783,7 @@ export async function buildMetricsPayload() {
     const contractDealsRaw = await fetchAllDealsByPipeline(
       hubspotToken,
       CONTRACTS_PIPELINE_ID,
-      ["dealname", "parceiro", "canal", "closedate", "createdate"]
+      ["dealname", "parceiro", "canal", "closedate", "createdate", "dealstage"]
     );
 
     const contractDeals: ContractDealMeta[] = contractDealsRaw
@@ -783,6 +794,23 @@ export async function buildMetricsPayload() {
         dealName: shortDealName(String(deal.properties?.dealname ?? "").trim() || String(deal.id)),
       }))
       .filter((deal) => deal.parceiro);
+
+    const contractMetrics: ContractMetric[] = contractDealsRaw
+      .filter((deal) => isB2BCanal(deal.properties?.canal))
+      .map((deal) => {
+        const stageId = String(deal.properties?.dealstage ?? "").trim();
+        const rawCloseDate = String(deal.properties?.closedate ?? "").trim();
+        const rawCreateDate = String(deal.properties?.createdate ?? "").trim();
+        return {
+          dealId: String(deal.id),
+          dealName: shortDealName(String(deal.properties?.dealname ?? "").trim() || String(deal.id)),
+          parceiro: String(deal.properties?.parceiro ?? "").trim(),
+          closeDate: rawCloseDate || null,
+          createDate: rawCreateDate || null,
+          status: contractStageMap[stageId] ?? "",
+        };
+      })
+      .filter((metric) => metric.parceiro);
 
     const filteredDeals = deals
       .map((deal) => {
@@ -1039,6 +1067,7 @@ export async function buildMetricsPayload() {
     return {
       partnerMetrics,
       serviceJourneyEvents,
+      contractMetrics,
       meta: {
         source: "hubspot+powerbi",
         pipelineId: PIPELINE_ID,
@@ -1048,6 +1077,7 @@ export async function buildMetricsPayload() {
         dealCount: filteredDeals.length,
         serviceJourneyDealCount: allPipelineDeals.length,
         billingEntryCount: billingEntries.length,
+        contractCount: contractMetrics.length,
       },
     };
 }
@@ -1104,6 +1134,7 @@ function normalizeSnapshotPayload(payload: Partial<PartnerMetricsPayload> | null
   return {
     partnerMetrics: payload.partnerMetrics,
     serviceJourneyEvents: Array.isArray(payload.serviceJourneyEvents) ? payload.serviceJourneyEvents : [],
+    contractMetrics: Array.isArray(payload.contractMetrics) ? payload.contractMetrics : [],
     meta: typeof payload.meta === "object" && payload.meta ? payload.meta : {},
   };
 }
@@ -1230,6 +1261,17 @@ export async function getPartnerMetricsPayload(options?: { refresh?: boolean }) 
   return refreshPromise;
 }
 
+function toPublicPayload(payload: PartnerMetricsPayload): Omit<PartnerMetricsPayload, "contractMetrics"> {
+  const publicMeta = { ...payload.meta };
+  delete publicMeta.contractCount;
+
+  return {
+    partnerMetrics: payload.partnerMetrics,
+    serviceJourneyEvents: payload.serviceJourneyEvents,
+    meta: publicMeta,
+  };
+}
+
 export async function GET(request: Request) {
   let decision: ManagedAccessAllowedDecision;
 
@@ -1259,7 +1301,7 @@ export async function GET(request: Request) {
     }
 
     const payload = await getPartnerMetricsPayload({ refresh: forceRefresh });
-    return NextResponse.json(applyManagedAccessScope(payload, decision));
+    return NextResponse.json(toPublicPayload(applyManagedAccessScope(payload, decision)));
   } catch {
     const snapshot = await readSnapshot();
     if (snapshot) {
@@ -1267,8 +1309,9 @@ export async function GET(request: Request) {
         withSnapshotMeta(snapshot.payload, snapshot.generatedAt),
         decision
       );
+      const publicScopedPayload = toPublicPayload(scopedPayload);
       return NextResponse.json({
-        ...scopedPayload,
+        ...publicScopedPayload,
         meta: {
           ...scopedPayload.meta,
           generatedAt: snapshot.generatedAt,
