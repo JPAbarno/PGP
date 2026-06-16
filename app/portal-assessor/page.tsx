@@ -8,6 +8,8 @@ import {
 import { headers } from "next/headers";
 import Link from "next/link";
 import { PartnerSelector } from "./_components/partner-selector";
+import { PortalPageHeader } from "./_components/portal-page-header";
+import { PortalErrorState } from "./_components/portal-error-state";
 
 class ApiError extends Error {
   constructor(public readonly status: number) {
@@ -67,56 +69,26 @@ async function resolvePageState(): Promise<PageState> {
   }
 }
 
-function ErrorCard({ message }: { message: string }) {
-  return (
-    <section
-      style={{
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(239,68,68,0.30)",
-        borderRadius: 8,
-        padding: 28,
-      }}
-    >
-      <p style={{ color: "#f87171", fontSize: 15 }}>{message}</p>
-    </section>
-  );
-}
-
 export default async function PortalAssessorPage() {
   const state = await resolvePageState();
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 32px 72px" }}>
-      <div style={{ marginBottom: 32 }}>
-        <div
-          style={{
-            fontSize: 12,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "#FFC130",
-            marginBottom: 8,
-          }}
-        >
-          Portal do Assessor
-        </div>
-        <h1 style={{ fontSize: 36, lineHeight: 1.1, marginBottom: 10 }}>
-          Bem-vindo ao Portal do Assessor
-        </h1>
-        <p style={{ color: "#9ca3af", fontSize: 16, lineHeight: 1.6 }}>
-          Visualize pipeline comercial, clientes, comissões e envie novas oportunidades.
-        </p>
-      </div>
+    <div style={{ margin: "0 auto", maxWidth: 1100, padding: "40px 32px 72px" }}>
+      <PortalPageHeader
+        title="Bem-vindo ao Portal do Assessor"
+        subtitle="Visualize pipeline comercial, clientes, comissões e envie novas oportunidades."
+      />
 
       {state.kind === "unauthenticated" && (
-        <ErrorCard message="Sessão necessária para acessar o Portal do Assessor. Por favor, faça login." />
+        <PortalErrorState message="Sessão necessária para acessar o Portal do Assessor. Por favor, faça login." />
       )}
 
       {state.kind === "forbidden" && (
-        <ErrorCard message="Acesso não liberado. Entre em contato com o administrador da plataforma." />
+        <PortalErrorState message="Acesso não liberado. Entre em contato com o administrador da plataforma." />
       )}
 
       {state.kind === "error" && (
-        <ErrorCard message="Não foi possível carregar o Portal do Assessor. Tente novamente mais tarde." />
+        <PortalErrorState message="Não foi possível carregar o Portal do Assessor. Tente novamente mais tarde." />
       )}
 
       {state.kind === "admin_galapos" && (
@@ -136,9 +108,9 @@ export default async function PortalAssessorPage() {
             style={{
               color: "#9ca3af",
               fontSize: 12,
-              textTransform: "uppercase",
               letterSpacing: "0.08em",
               marginBottom: 8,
+              textTransform: "uppercase",
             }}
           >
             Parceiro associado
@@ -149,14 +121,14 @@ export default async function PortalAssessorPage() {
           <Link
             href="/portal-assessor/pipeline"
             style={{
-              display: "inline-block",
-              padding: "10px 20px",
               background: "#FFC130",
-              color: "#111",
               borderRadius: 6,
-              textDecoration: "none",
-              fontWeight: 700,
+              color: "#111",
+              display: "inline-block",
               fontSize: 14,
+              fontWeight: 700,
+              padding: "10px 20px",
+              textDecoration: "none",
             }}
           >
             Acessar Pipeline →

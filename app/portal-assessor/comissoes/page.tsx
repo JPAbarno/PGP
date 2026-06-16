@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import {
@@ -7,7 +6,9 @@ import {
   isPartnerAccess,
 } from "@/lib/access-control";
 import { headers } from "next/headers";
-import Link from "next/link";
+import { PortalPageHeader } from "../_components/portal-page-header";
+import { PortalErrorState } from "../_components/portal-error-state";
+import { PortalNoPartnerState } from "../_components/portal-empty-state";
 
 type Invoice = {
   dealId: string;
@@ -117,36 +118,6 @@ async function resolvePageState(partnerParam: string | undefined): Promise<PageS
   }
 }
 
-function ErrorCard({ message }: { message: string }) {
-  return (
-    <section
-      style={{
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(239,68,68,0.30)",
-        borderRadius: 8,
-        padding: 28,
-      }}
-    >
-      <p style={{ color: "#f87171", fontSize: 15 }}>{message}</p>
-    </section>
-  );
-}
-
-function InfoCard({ children }: { children: ReactNode }) {
-  return (
-    <section
-      style={{
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 8,
-        padding: 28,
-      }}
-    >
-      {children}
-    </section>
-  );
-}
-
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";
   try {
@@ -179,8 +150,8 @@ function SummaryCards({
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
         gap: 16,
+        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
         marginBottom: 28,
       }}
     >
@@ -196,14 +167,14 @@ function SummaryCards({
           style={{
             color: "#9ca3af",
             fontSize: 12,
-            textTransform: "uppercase",
             letterSpacing: "0.08em",
             marginBottom: 8,
+            textTransform: "uppercase",
           }}
         >
           Faturamento total
         </p>
-        <p style={{ fontSize: 22, fontWeight: 700, color: "#e5e7eb" }}>
+        <p style={{ color: "#e5e7eb", fontSize: 22, fontWeight: 700 }}>
           {formatCurrency(totalFaturamento)}
         </p>
       </div>
@@ -220,14 +191,14 @@ function SummaryCards({
           style={{
             color: "#9ca3af",
             fontSize: 12,
-            textTransform: "uppercase",
             letterSpacing: "0.08em",
             marginBottom: 8,
+            textTransform: "uppercase",
           }}
         >
           Comissão total
         </p>
-        <p style={{ fontSize: 22, fontWeight: 700, color: "#FFC130" }}>
+        <p style={{ color: "#FFC130", fontSize: 22, fontWeight: 700 }}>
           {formatCurrency(totalComissao)}
         </p>
       </div>
@@ -244,14 +215,14 @@ function SummaryCards({
           style={{
             color: "#9ca3af",
             fontSize: 12,
-            textTransform: "uppercase",
             letterSpacing: "0.08em",
             marginBottom: 8,
+            textTransform: "uppercase",
           }}
         >
           Registros
         </p>
-        <p style={{ fontSize: 22, fontWeight: 700, color: "#e5e7eb" }}>{invoiceCount}</p>
+        <p style={{ color: "#e5e7eb", fontSize: 22, fontWeight: 700 }}>{invoiceCount}</p>
       </div>
     </div>
   );
@@ -262,29 +233,36 @@ const TABLE_HEADERS = ["Contrato", "Parceiro", "Data de emissão", "Faturamento"
 function InvoicesTable({ invoices }: { invoices: Invoice[] }) {
   if (invoices.length === 0) {
     return (
-      <InfoCard>
+      <section
+        style={{
+          background: "rgba(255,255,255,0.03)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 8,
+          padding: 28,
+        }}
+      >
         <p style={{ color: "#9ca3af", fontSize: 15 }}>
           Nenhum registro de comissão encontrado para este parceiro.
         </p>
-      </InfoCard>
+      </section>
     );
   }
 
   return (
     <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+      <table style={{ borderCollapse: "collapse", fontSize: 14, width: "100%" }}>
         <thead>
           <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.10)", textAlign: "left" }}>
             {TABLE_HEADERS.map((col) => (
               <th
                 key={col}
                 style={{
-                  padding: "10px 12px",
                   color: "#9ca3af",
-                  fontWeight: 600,
                   fontSize: 12,
-                  textTransform: "uppercase",
+                  fontWeight: 600,
                   letterSpacing: "0.06em",
+                  padding: "10px 12px",
+                  textTransform: "uppercase",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -299,19 +277,19 @@ function InvoicesTable({ invoices }: { invoices: Invoice[] }) {
               key={`${invoice.dealId}-${index}`}
               style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
             >
-              <td style={{ padding: "12px 12px", color: "#e5e7eb", fontWeight: 500 }}>
+              <td style={{ color: "#e5e7eb", fontWeight: 500, padding: "12px 12px" }}>
                 {invoice.dealName || "—"}
               </td>
-              <td style={{ padding: "12px 12px", color: "#9ca3af" }}>
+              <td style={{ color: "#9ca3af", padding: "12px 12px" }}>
                 {invoice.parceiro || "—"}
               </td>
-              <td style={{ padding: "12px 12px", color: "#9ca3af", whiteSpace: "nowrap" }}>
+              <td style={{ color: "#9ca3af", padding: "12px 12px", whiteSpace: "nowrap" }}>
                 {formatDate(invoice.dataEmissao)}
               </td>
-              <td style={{ padding: "12px 12px", color: "#d1d5db", whiteSpace: "nowrap" }}>
+              <td style={{ color: "#d1d5db", padding: "12px 12px", whiteSpace: "nowrap" }}>
                 {formatCurrency(invoice.faturamento)}
               </td>
-              <td style={{ padding: "12px 12px", color: "#FFC130", whiteSpace: "nowrap" }}>
+              <td style={{ color: "#FFC130", padding: "12px 12px", whiteSpace: "nowrap" }}>
                 {formatCurrency(invoice.comissao)}
               </td>
             </tr>
@@ -331,69 +309,29 @@ export default async function PortalAssessorComissoesPage({
   const parceiroParam = typeof params.parceiro === "string" ? params.parceiro : undefined;
   const state = await resolvePageState(parceiroParam);
 
-  return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 32px 72px" }}>
-      <div style={{ marginBottom: 32 }}>
-        <div
-          style={{
-            fontSize: 12,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "#FFC130",
-            marginBottom: 8,
-          }}
-        >
-          Portal do Assessor
-        </div>
-        <h1 style={{ fontSize: 32, lineHeight: 1.1, marginBottom: 10 }}>Comissões</h1>
+  const subtitle =
+    state.kind === "loaded"
+      ? `${state.partnerName} — ${state.invoiceCount === 1 ? "1 registro" : `${state.invoiceCount} registros`}`
+      : undefined;
 
-        {state.kind === "loaded" && (
-          <p style={{ color: "#9ca3af", fontSize: 15 }}>
-            {state.partnerName} —{" "}
-            {state.invoiceCount === 1
-              ? "1 registro"
-              : `${state.invoiceCount} registros`}
-          </p>
-        )}
-      </div>
+  return (
+    <div style={{ margin: "0 auto", maxWidth: 1100, padding: "40px 32px 72px" }}>
+      <PortalPageHeader title="Comissões" subtitle={subtitle} />
 
       {state.kind === "unauthenticated" && (
-        <ErrorCard message="Sessão necessária para acessar Comissões. Por favor, faça login." />
+        <PortalErrorState message="Sessão necessária para acessar Comissões. Por favor, faça login." />
       )}
 
       {state.kind === "forbidden" && (
-        <ErrorCard message="Acesso não liberado. Entre em contato com o administrador da plataforma." />
+        <PortalErrorState message="Acesso não liberado. Entre em contato com o administrador da plataforma." />
       )}
 
       {state.kind === "no_partner_selected" && (
-        <InfoCard>
-          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>
-            Selecione um parceiro
-          </h2>
-          <p style={{ color: "#9ca3af", fontSize: 15, marginBottom: 20, lineHeight: 1.6 }}>
-            É necessário selecionar um parceiro antes de visualizar as Comissões. Volte ao Portal
-            do Assessor e escolha um parceiro para continuar.
-          </p>
-          <Link
-            href="/portal-assessor"
-            style={{
-              display: "inline-block",
-              padding: "10px 20px",
-              background: "#FFC130",
-              color: "#111",
-              borderRadius: 6,
-              textDecoration: "none",
-              fontWeight: 700,
-              fontSize: 14,
-            }}
-          >
-            ← Selecionar parceiro
-          </Link>
-        </InfoCard>
+        <PortalNoPartnerState resource="as Comissões" />
       )}
 
       {(state.kind === "api_error" || state.kind === "error") && (
-        <ErrorCard message="Não foi possível carregar as Comissões. Tente novamente mais tarde." />
+        <PortalErrorState message="Não foi possível carregar as Comissões. Tente novamente mais tarde." />
       )}
 
       {state.kind === "loaded" && (
