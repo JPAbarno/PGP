@@ -67,42 +67,6 @@ async function resolvePageState(): Promise<PageState> {
   }
 }
 
-const NAV_LINKS = [
-  { href: "/portal-assessor/pipeline", label: "Pipeline" },
-  { href: "/portal-assessor/clientes", label: "Clientes" },
-  { href: "/portal-assessor/comissoes", label: "Comissões" },
-  { href: "/portal-assessor/enviar-oportunidade", label: "Enviar oportunidade" },
-];
-
-function SecondaryNav({ partnerName }: { partnerName?: string }) {
-  return (
-    <nav style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-      {NAV_LINKS.map(({ href, label }) => {
-        const dest =
-          partnerName ? `${href}?parceiro=${encodeURIComponent(partnerName)}` : href;
-        return (
-          <Link
-            key={href}
-            href={dest}
-            style={{
-              display: "inline-block",
-              padding: "8px 16px",
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              borderRadius: 6,
-              color: "#d1d5db",
-              textDecoration: "none",
-              fontSize: 14,
-            }}
-          >
-            {label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
-
 function ErrorCard({ message }: { message: string }) {
   return (
     <section
@@ -156,60 +120,48 @@ export default async function PortalAssessorPage() {
       )}
 
       {state.kind === "admin_galapos" && (
-        <>
-          <PartnerSelector partners={state.partners} />
-          <div style={{ marginTop: 32 }}>
-            <p style={{ color: "#6b7280", fontSize: 13, marginBottom: 12 }}>
-              Atalhos — disponíveis após selecionar um parceiro acima.
-            </p>
-            <SecondaryNav />
-          </div>
-        </>
+        <PartnerSelector partners={state.partners} />
       )}
 
       {state.kind === "partner" && (
-        <>
-          <section
+        <section
+          style={{
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 8,
+            padding: 28,
+          }}
+        >
+          <p
             style={{
-              background: "rgba(255,255,255,0.03)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 8,
-              padding: 28,
-              marginBottom: 24,
+              color: "#9ca3af",
+              fontSize: 12,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              marginBottom: 8,
             }}
           >
-            <p
-              style={{
-                color: "#9ca3af",
-                fontSize: 12,
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                marginBottom: 8,
-              }}
-            >
-              Parceiro associado
-            </p>
-            <p style={{ fontSize: 22, fontWeight: 600, marginBottom: 20 }}>
-              {state.partnerName}
-            </p>
-            <Link
-              href="/portal-assessor/pipeline"
-              style={{
-                display: "inline-block",
-                padding: "10px 20px",
-                background: "#FFC130",
-                color: "#111",
-                borderRadius: 6,
-                textDecoration: "none",
-                fontWeight: 700,
-                fontSize: 14,
-              }}
-            >
-              Acessar Pipeline →
-            </Link>
-          </section>
-          <SecondaryNav partnerName={state.partnerName} />
-        </>
+            Parceiro associado
+          </p>
+          <p style={{ fontSize: 22, fontWeight: 600, marginBottom: 20 }}>
+            {state.partnerName}
+          </p>
+          <Link
+            href="/portal-assessor/pipeline"
+            style={{
+              display: "inline-block",
+              padding: "10px 20px",
+              background: "#FFC130",
+              color: "#111",
+              borderRadius: 6,
+              textDecoration: "none",
+              fontWeight: 700,
+              fontSize: 14,
+            }}
+          >
+            Acessar Pipeline →
+          </Link>
+        </section>
       )}
     </div>
   );

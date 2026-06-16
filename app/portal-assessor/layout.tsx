@@ -1,23 +1,5 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
-
-const portalRoutes = [
-  { href: "/portal-assessor", label: "Inicio" },
-  { href: "/portal-assessor/pipeline", label: "Pipeline" },
-  { href: "/portal-assessor/clientes", label: "Clientes" },
-  { href: "/portal-assessor/comissoes", label: "Comissoes" },
-  { href: "/portal-assessor/enviar-oportunidade", label: "Enviar oportunidade" },
-];
-
-const linkStyle = {
-  border: "1px solid rgba(255,193,48,0.24)",
-  borderRadius: 999,
-  color: "#FFC130",
-  fontSize: 12,
-  fontWeight: 700,
-  padding: "8px 12px",
-  textDecoration: "none",
-};
+import { PortalNav } from "./_components/portal-nav";
 
 export default function PortalAssessorLayout({ children }: { children: ReactNode }) {
   return (
@@ -43,31 +25,23 @@ export default function PortalAssessorLayout({ children }: { children: ReactNode
             padding: "14px 32px",
           }}
         >
-          <div>
-            <div
-              style={{
-                color: "#FFC130",
-                fontSize: 12,
-                fontWeight: 700,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-              }}
-            >
-              Portal do Assessor
-            </div>
-            <div style={{ color: "#9ca3af", fontSize: 13, marginTop: 4 }}>Modulo em preparacao</div>
+          <div
+            style={{
+              color: "#FFC130",
+              fontSize: 12,
+              fontWeight: 700,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Portal do Assessor
           </div>
-          <nav style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {portalRoutes.map((route) => (
-              <Link href={route.href} key={route.href} style={linkStyle}>
-                {route.label}
-              </Link>
-            ))}
-          </nav>
+          <PortalNav />
         </div>
       </header>
 
-      <main style={{ margin: "0 auto", maxWidth: 1180, padding: "40px 32px 72px" }}>{children}</main>
+      <main>{children}</main>
     </div>
   );
 }

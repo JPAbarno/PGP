@@ -140,44 +140,6 @@ function InfoCard({ children }: { children: ReactNode }) {
   );
 }
 
-const SUB_NAV_LINKS = [
-  { href: "/portal-assessor", label: "← Portal", preservePartner: false },
-  { href: "/portal-assessor/clientes", label: "Clientes", preservePartner: true },
-  { href: "/portal-assessor/comissoes", label: "Comissões", preservePartner: true },
-  { href: "/portal-assessor/enviar-oportunidade", label: "Enviar oportunidade", preservePartner: true },
-];
-
-function SubNav({ partnerName }: { partnerName?: string }) {
-  return (
-    <nav style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-      {SUB_NAV_LINKS.map(({ href, label, preservePartner }) => {
-        const dest =
-          partnerName && preservePartner
-            ? `${href}?parceiro=${encodeURIComponent(partnerName)}`
-            : href;
-        return (
-          <Link
-            key={href}
-            href={dest}
-            style={{
-              display: "inline-block",
-              padding: "8px 16px",
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              borderRadius: 6,
-              color: "#d1d5db",
-              textDecoration: "none",
-              fontSize: 14,
-            }}
-          >
-            {label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
-
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";
   try {
@@ -289,12 +251,9 @@ export default async function PortalAssessorPipelinePage({
   const parceiroParam = typeof params.parceiro === "string" ? params.parceiro : undefined;
   const state = await resolvePageState(parceiroParam);
 
-  const partnerNameForLinks =
-    state.kind === "loaded" && state.isAdminView ? state.partnerName : undefined;
-
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 32px 72px" }}>
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 32 }}>
         <div
           style={{
             fontSize: 12,
@@ -316,10 +275,6 @@ export default async function PortalAssessorPipelinePage({
               : `${state.deals.length} oportunidades`}
           </p>
         )}
-      </div>
-
-      <div style={{ marginBottom: 28 }}>
-        <SubNav partnerName={partnerNameForLinks} />
       </div>
 
       {state.kind === "unauthenticated" && (
