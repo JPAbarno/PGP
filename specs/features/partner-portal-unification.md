@@ -177,6 +177,61 @@ Funcionalidades:
 - busca textual;
 - ordenação por colunas.
 
+#### Fonte de dados e semântica
+
+`invoices` representam registros financeiros de comissões e faturamento já materializados no snapshot — não são eventos de pipeline comercial.
+
+A origem financeira dos dados é o Power BI, tabela `Fato_CR_Pagos`, integrado durante o rebuild do snapshot. A API `GET /api/portal-assessor/invoices` não chama o Power BI em runtime.
+
+A fonte materializada atual da API é `partnerMetrics[].deals[]`, estrutura do snapshot. `partnerMetrics[].deals[]` também contém eventos de pipeline comercial (reuniões, propostas, atividades). Por isso, a API não pode retornar esse array bruto — deve filtrar exclusivamente entries financeiras.
+
+Entries financeiras são identificadas pela condição: `faturamentoGalapos > 0 || comissaoPaga > 0`.
+
+Mapeamento de campos do snapshot para o contrato da API:
+
+- `faturamentoGalapos` → `faturamento`
+- `comissaoPaga` → `comissao`
+- `activityDate` → `dataEmissao` (apenas neste contexto financeiro)
+- `parceiro` vem do nível `partnerMetrics[].parceiro`, não das entries individuais
+
+Um mesmo `dealId` pode ter múltiplas entries financeiras, porque um contrato pode ter mais de uma emissão financeira. A API não deve deduplicar por `dealId` — cada entry financeira deve ser preservada como invoice separada.
+
+`summary.totalFaturamento` e `summary.totalComissao` devem somar exclusivamente as invoices retornadas ao parceiro autorizado.
+
+A API deve filtrar `partnerMetrics[]` server-side por parceiro antes de extrair entries financeiras:
+
+- `Admin` e `Galapos`: parceiro passado via `?parceiro=` como contexto de visualização.
+- `Parceiro`: parceiro resolvido a partir da associação no Dataverse. Query param com valor divergente deve retornar `403`.
+
+Snapshot ausente, inválido ou sem entries financeiras deve ser tratado de forma segura pela API, retornando lista vazia sem falha crítica.
+
+Dados financeiros são sensíveis. A API nunca deve expor entries de `partnerMetrics[].deals[]` sem aplicar filtro de escopo por parceiro.
+
+`contractMetrics` não é a fonte desta API. `contractMetrics` é exclusivamente a fonte de `GET /api/portal-assessor/clients` e não deve ser confundida com a fonte de invoices.
+
+Contrato externo da API `GET /api/portal-assessor/invoices`:
+
+```ts
+{
+  invoices: Array<{
+    dealId: string
+    dealName: string
+    parceiro: string
+    dataEmissao: string | null
+    faturamento: number
+    comissao: number
+  }>
+  summary: {
+    totalFaturamento: number
+    totalComissao: number
+  }
+  meta: {
+    partnerName: string
+    invoiceCount: number
+  }
+}
+```
+
 ### Envio de oportunidades
 
 Origem:
@@ -401,7 +456,27 @@ Snapshot ausente, inválido ou sem `contractMetrics` deve ser tratado de forma s
 
 ### RF-004 — Migrar relatório de comissões
 
-A visão de receita, NFs e comissões deve ser incorporada à PGP.
+A visão de receita, NFs e comissões deve ser incorporada à PGP, servida pela API `GET /api/portal-assessor/invoices`.
+
+A fonte de dados da API é `partnerMetrics[].deals[]`, materializado no snapshot durante o rebuild. A API não chama o Power BI em runtime. A origem financeira original é o Power BI, tabela `Fato_CR_Pagos`.
+
+A API deve extrair apenas entries financeiras de `partnerMetrics[].deals[]`, identificadas por `faturamentoGalapos > 0 || comissaoPaga > 0`. Eventos comerciais presentes no mesmo array não devem ser retornados.
+
+A API deve aplicar filtro server-side por parceiro antes de extrair entries financeiras.
+
+Para `Admin` e `Galapos`, o parceiro é passado via query param `?parceiro=` como contexto de visualização.
+
+Para `Parceiro`, o parceiro é resolvido a partir da associação no Dataverse. Query param com valor divergente do parceiro associado deve retornar `403`.
+
+A API não deve deduplicar por `dealId`. Um mesmo `dealId` pode ter múltiplas entries financeiras e todas devem ser preservadas como invoices separadas.
+
+`summary.totalFaturamento` e `summary.totalComissao` devem somar exclusivamente as invoices retornadas ao parceiro autorizado.
+
+Snapshot ausente, inválido ou sem entries financeiras deve ser tratado de forma segura, retornando lista vazia sem falha crítica.
+
+A API nunca deve expor dados financeiros sem aplicar filtro de escopo por parceiro.
+
+`contractMetrics` não é a fonte desta API e não deve ser confundida com a fonte de invoices. `contractMetrics` é exclusivamente a fonte de `GET /api/portal-assessor/clients`.
 
 ### RF-005 — Migrar formulário HubSpot embedded
 
