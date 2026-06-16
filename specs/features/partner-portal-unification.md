@@ -147,6 +147,18 @@ Funcionalidades:
 - ordenação por colunas;
 - métricas de contratos totais, ativos, vencendo em 60 dias e vencidos.
 
+#### Fonte de dados e semântica
+
+`clients` representam contratos, clientes e projetos vinculados ao parceiro — não são eventos de pipeline comercial.
+
+A fonte interna atual da API `/api/portal-assessor/clients` é `contractMetrics`, estrutura materializada no snapshot durante o rebuild. `contractMetrics` é derivada do pipeline de contratos do HubSpot e não deve ser confundida com `partnerMetrics[].deals[]`.
+
+`partnerMetrics[].deals[]` registra atividade de pipeline comercial (reuniões, propostas, contratos fechados no pipeline de vendas) e não deve ser usada como fonte da API `/api/portal-assessor/clients`.
+
+O campo `status` em `/clients` corresponde ao label/stage real do contrato disponível em `contractMetrics`. `status` não deve ser reinterpretado como ativo/vencido/vencendo sem campo real disponível para essa classificação.
+
+Campo de vencimento/vigência não está disponível em `contractMetrics` e não deve ser inventado. `closeDate` e `createDate` são datas do deal no HubSpot e não representam vigência contratual. As métricas de "ativos, vencendo em 60 dias e vencidos" da listagem original do `PortalAssessor` dependem desse campo e não podem ser reproduzidas com os dados atuais.
+
 ### Receita, NFs e comissões
 
 Origem:
@@ -373,7 +385,19 @@ O pipeline comercial do `PortalAssessor` deve ser incorporado à PGP.
 
 ### RF-003 — Migrar carteira de clientes/projetos
 
-A visão de clientes/projetos em andamento deve ser incorporada à PGP.
+A visão de clientes/projetos em andamento deve ser incorporada à PGP, servida pela API `GET /api/portal-assessor/clients`.
+
+A fonte de dados da API é exclusivamente `contractMetrics`, materializado no snapshot. `partnerMetrics[].deals[]` não deve ser usado como fonte desta API.
+
+A API deve aplicar filtro server-side por parceiro antes de retornar dados.
+
+Para `Admin` e `Galapos`, o parceiro é passado via query param `?parceiro=` como contexto de visualização.
+
+Para `Parceiro`, o parceiro é resolvido a partir da associação no Dataverse. Query param com valor divergente do parceiro associado deve retornar `403`.
+
+Snapshot ausente, inválido ou sem `contractMetrics` deve ser tratado de forma segura pela API, retornando lista vazia sem falha crítica.
+
+`contractMetrics` pode conter contratos de múltiplos parceiros internamente. A API nunca deve expor dados sem aplicar filtro de escopo por parceiro.
 
 ### RF-004 — Migrar relatório de comissões
 
