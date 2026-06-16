@@ -1,5 +1,465 @@
-import { PortalPlaceholder } from "../_components/portal-placeholder";
+import type { ReactNode } from "react";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
+import {
+  getManagedAccessDecision,
+  isAdminOrGalaposAccess,
+  isPartnerAccess,
+} from "@/lib/access-control";
+import { headers } from "next/headers";
+import Link from "next/link";
 
-export default function PortalAssessorComissoesPage() {
-  return <PortalPlaceholder title="Comissoes" />;
+type Invoice = {
+  dealId: string;
+  dealName: string;
+  parceiro: string;
+  dataEmissao: string | null;
+  faturamento: number;
+  comissao: number;
+};
+
+type InvoicesApiResponse = {
+  invoices: Invoice[];
+  summary: { totalFaturamento: number; totalComissao: number };
+  meta: { partnerName: string; invoiceCount: number };
+};
+
+class ApiError extends Error {
+  constructor(public readonly status: number) {
+    super(`api_error_${status}`);
+  }
+}
+
+async function fetchInvoices(
+  cookieHeader: string,
+  host: string,
+  partnerName?: string
+): Promise<InvoicesApiResponse> {
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+  const base = `${protocol}://${host}/api/portal-assessor/invoices`;
+  const url = partnerName
+    ? `${base}?parceiro=${encodeURIComponent(partnerName)}`
+    : base;
+
+  const res = await fetch(url, {
+    headers: { cookie: cookieHeader },
+    cache: "no-store",
+  });
+
+  if (!res.ok) throw new ApiError(res.status);
+
+  return res.json() as Promise<InvoicesApiResponse>;
+}
+
+type PageState =
+  | { kind: "unauthenticated" }
+  | { kind: "forbidden" }
+  | { kind: "no_partner_selected" }
+  | { kind: "api_error"; httpStatus: number }
+  | { kind: "error" }
+  | {
+      kind: "loaded";
+      invoices: Invoice[];
+      summary: { totalFaturamento: number; totalComissao: number };
+      partnerName: string;
+      invoiceCount: number;
+      isAdminView: boolean;
+    };
+
+async function resolvePageState(partnerParam: string | undefined): Promise<PageState> {
+  try {
+    const session = await getServerSession(authOptions);
+    const decision = await getManagedAccessDecision(session?.user?.email);
+
+    if (decision.access === "unauthenticated") return { kind: "unauthenticated" };
+    if (decision.access === "forbidden") return { kind: "forbidden" };
+
+    const headersList = await headers();
+    const host = headersList.get("host") ?? "localhost:3000";
+    const cookieHeader = headersList.get("cookie") ?? "";
+
+    if (isAdminOrGalaposAccess(decision)) {
+      const trimmedPartner = partnerParam?.trim();
+      if (!trimmedPartner) return { kind: "no_partner_selected" };
+
+      const data = await fetchInvoices(cookieHeader, host, trimmedPartner);
+      return {
+        kind: "loaded",
+        invoices: data.invoices,
+        summary: data.summary,
+        partnerName: data.meta.partnerName,
+        invoiceCount: data.meta.invoiceCount,
+        isAdminView: true,
+      };
+    }
+
+    if (isPartnerAccess(decision)) {
+      const data = await fetchInvoices(cookieHeader, host);
+      return {
+        kind: "loaded",
+        invoices: data.invoices,
+        summary: data.summary,
+        partnerName: data.meta.partnerName,
+        invoiceCount: data.meta.invoiceCount,
+        isAdminView: false,
+      };
+    }
+
+    return { kind: "forbidden" };
+  } catch (err) {
+    if (err instanceof ApiError) {
+      if (err.status === 401) return { kind: "unauthenticated" };
+      if (err.status === 403) return { kind: "forbidden" };
+      if (err.status === 400) return { kind: "no_partner_selected" };
+      return { kind: "api_error", httpStatus: err.status };
+    }
+    return { kind: "error" };
+  }
+}
+
+function ErrorCard({ message }: { message: string }) {
+  return (
+    <section
+      style={{
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(239,68,68,0.30)",
+        borderRadius: 8,
+        padding: 28,
+      }}
+    >
+      <p style={{ color: "#f87171", fontSize: 15 }}>{message}</p>
+    </section>
+  );
+}
+
+function InfoCard({ children }: { children: ReactNode }) {
+  return (
+    <section
+      style={{
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 8,
+        padding: 28,
+      }}
+    >
+      {children}
+    </section>
+  );
+}
+
+const SUB_NAV_LINKS = [
+  { href: "/portal-assessor", label: "← Portal", preservePartner: false },
+  { href: "/portal-assessor/pipeline", label: "Pipeline", preservePartner: true },
+  { href: "/portal-assessor/clientes", label: "Clientes", preservePartner: true },
+  { href: "/portal-assessor/enviar-oportunidade", label: "Enviar oportunidade", preservePartner: true },
+];
+
+function SubNav({ partnerName }: { partnerName?: string }) {
+  return (
+    <nav style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      {SUB_NAV_LINKS.map(({ href, label, preservePartner }) => {
+        const dest =
+          partnerName && preservePartner
+            ? `${href}?parceiro=${encodeURIComponent(partnerName)}`
+            : href;
+        return (
+          <Link
+            key={href}
+            href={dest}
+            style={{
+              display: "inline-block",
+              padding: "8px 16px",
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.10)",
+              borderRadius: 6,
+              color: "#d1d5db",
+              textDecoration: "none",
+              fontSize: 14,
+            }}
+          >
+            {label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatCurrency(value: number): string {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function SummaryCards({
+  totalFaturamento,
+  totalComissao,
+  invoiceCount,
+}: {
+  totalFaturamento: number;
+  totalComissao: number;
+  invoiceCount: number;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+        gap: 16,
+        marginBottom: 28,
+      }}
+    >
+      <div
+        style={{
+          background: "rgba(255,255,255,0.03)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 8,
+          padding: "20px 24px",
+        }}
+      >
+        <p
+          style={{
+            color: "#9ca3af",
+            fontSize: 12,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            marginBottom: 8,
+          }}
+        >
+          Faturamento total
+        </p>
+        <p style={{ fontSize: 22, fontWeight: 700, color: "#e5e7eb" }}>
+          {formatCurrency(totalFaturamento)}
+        </p>
+      </div>
+
+      <div
+        style={{
+          background: "rgba(255,255,255,0.03)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 8,
+          padding: "20px 24px",
+        }}
+      >
+        <p
+          style={{
+            color: "#9ca3af",
+            fontSize: 12,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            marginBottom: 8,
+          }}
+        >
+          Comissão total
+        </p>
+        <p style={{ fontSize: 22, fontWeight: 700, color: "#FFC130" }}>
+          {formatCurrency(totalComissao)}
+        </p>
+      </div>
+
+      <div
+        style={{
+          background: "rgba(255,255,255,0.03)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 8,
+          padding: "20px 24px",
+        }}
+      >
+        <p
+          style={{
+            color: "#9ca3af",
+            fontSize: 12,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            marginBottom: 8,
+          }}
+        >
+          Registros
+        </p>
+        <p style={{ fontSize: 22, fontWeight: 700, color: "#e5e7eb" }}>{invoiceCount}</p>
+      </div>
+    </div>
+  );
+}
+
+const TABLE_HEADERS = ["Contrato", "Parceiro", "Data de emissão", "Faturamento", "Comissão"];
+
+function InvoicesTable({ invoices }: { invoices: Invoice[] }) {
+  if (invoices.length === 0) {
+    return (
+      <InfoCard>
+        <p style={{ color: "#9ca3af", fontSize: 15 }}>
+          Nenhum registro de comissão encontrado para este parceiro.
+        </p>
+      </InfoCard>
+    );
+  }
+
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+        <thead>
+          <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.10)", textAlign: "left" }}>
+            {TABLE_HEADERS.map((col) => (
+              <th
+                key={col}
+                style={{
+                  padding: "10px 12px",
+                  color: "#9ca3af",
+                  fontWeight: 600,
+                  fontSize: 12,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {col}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {invoices.map((invoice, index) => (
+            <tr
+              key={`${invoice.dealId}-${index}`}
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+            >
+              <td style={{ padding: "12px 12px", color: "#e5e7eb", fontWeight: 500 }}>
+                {invoice.dealName || "—"}
+              </td>
+              <td style={{ padding: "12px 12px", color: "#9ca3af" }}>
+                {invoice.parceiro || "—"}
+              </td>
+              <td style={{ padding: "12px 12px", color: "#9ca3af", whiteSpace: "nowrap" }}>
+                {formatDate(invoice.dataEmissao)}
+              </td>
+              <td style={{ padding: "12px 12px", color: "#d1d5db", whiteSpace: "nowrap" }}>
+                {formatCurrency(invoice.faturamento)}
+              </td>
+              <td style={{ padding: "12px 12px", color: "#FFC130", whiteSpace: "nowrap" }}>
+                {formatCurrency(invoice.comissao)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default async function PortalAssessorComissoesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ parceiro?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const parceiroParam = typeof params.parceiro === "string" ? params.parceiro : undefined;
+  const state = await resolvePageState(parceiroParam);
+
+  const partnerNameForLinks =
+    state.kind === "loaded" && state.isAdminView ? state.partnerName : undefined;
+
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 32px 72px" }}>
+      <div style={{ marginBottom: 24 }}>
+        <div
+          style={{
+            fontSize: 12,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            color: "#FFC130",
+            marginBottom: 8,
+          }}
+        >
+          Portal do Assessor
+        </div>
+        <h1 style={{ fontSize: 32, lineHeight: 1.1, marginBottom: 10 }}>Comissões</h1>
+
+        {state.kind === "loaded" && (
+          <p style={{ color: "#9ca3af", fontSize: 15 }}>
+            {state.partnerName} —{" "}
+            {state.invoiceCount === 1
+              ? "1 registro"
+              : `${state.invoiceCount} registros`}
+          </p>
+        )}
+      </div>
+
+      <div style={{ marginBottom: 28 }}>
+        <SubNav partnerName={partnerNameForLinks} />
+      </div>
+
+      {state.kind === "unauthenticated" && (
+        <ErrorCard message="Sessão necessária para acessar Comissões. Por favor, faça login." />
+      )}
+
+      {state.kind === "forbidden" && (
+        <ErrorCard message="Acesso não liberado. Entre em contato com o administrador da plataforma." />
+      )}
+
+      {state.kind === "no_partner_selected" && (
+        <InfoCard>
+          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>
+            Selecione um parceiro
+          </h2>
+          <p style={{ color: "#9ca3af", fontSize: 15, marginBottom: 20, lineHeight: 1.6 }}>
+            É necessário selecionar um parceiro antes de visualizar as Comissões. Volte ao Portal
+            do Assessor e escolha um parceiro para continuar.
+          </p>
+          <Link
+            href="/portal-assessor"
+            style={{
+              display: "inline-block",
+              padding: "10px 20px",
+              background: "#FFC130",
+              color: "#111",
+              borderRadius: 6,
+              textDecoration: "none",
+              fontWeight: 700,
+              fontSize: 14,
+            }}
+          >
+            ← Selecionar parceiro
+          </Link>
+        </InfoCard>
+      )}
+
+      {(state.kind === "api_error" || state.kind === "error") && (
+        <ErrorCard message="Não foi possível carregar as Comissões. Tente novamente mais tarde." />
+      )}
+
+      {state.kind === "loaded" && (
+        <>
+          <SummaryCards
+            totalFaturamento={state.summary.totalFaturamento}
+            totalComissao={state.summary.totalComissao}
+            invoiceCount={state.invoiceCount}
+          />
+          <section
+            style={{
+              background: "rgba(255,255,255,0.02)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 8,
+              overflow: "hidden",
+            }}
+          >
+            <InvoicesTable invoices={state.invoices} />
+          </section>
+        </>
+      )}
+    </div>
+  );
 }
