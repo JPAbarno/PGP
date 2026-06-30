@@ -47,9 +47,10 @@ Antes de implementar qualquer nova funcionalidade ou alteração relevante, leia
 ## Features
 
 - `specs/features/remove-scorecard.md`
-- `specs/features/access-management.md`
-- `specs/features/access-layers.md`
-- `specs/features/partner-portal-unification.md`
+- `specs/features/access-management.md` — Gestão de Acessos Internos. Fase 1 implementada. Gestão de Acessos com UI Admin pendente (bloqueante para produção).
+- `specs/features/access-layers.md` — Camadas de Acesso. Controle de acesso por camada implementado no Bloco 4. Navegação condicional e Gestão de Acessos UI pendentes.
+- `specs/features/partner-portal-unification.md` — Unificação do Portal do Assessor. MVP Parcial Implementado no Bloco 4. Navegação unificada e Gestão de Acessos UI pendentes.
+- `specs/features/navigation-unification.md` — Navegação Unificada da PGP. Pendente — Bloco 5.
 
 ## Decisões
 
@@ -60,23 +61,61 @@ Antes de implementar qualquer nova funcionalidade ou alteração relevante, leia
 - `specs/decisions/ADR-005-partner-portal-unification.md`
 - `specs/decisions/ADR-006-dataverse-access-persistence.md`
 - `specs/decisions/ADR-007-external-partner-authentication.md`
+- `specs/decisions/ADR-008-pgp-unification-approach.md` — Abordagem de unificação: recriação dentro da PGP vs. migração do Portal XP. Registrada na Fase 5.1.
+
+## Estado atual do produto (2026-06-30)
+
+### Implementado
+
+- Autenticação com Auth.js/NextAuth e Microsoft Entra ID (ADR-003).
+- Autorização via Dataverse (ADR-006, ADR-007).
+- Gestão do Canal em `/dashboard` (Admin e Galapos).
+- Portal do Assessor em `/portal-assessor` com pipeline, clientes, comissões e formulário (Bloco 4).
+- Controle de acesso por camada (Admin, Galapos, Parceiro) nas APIs e páginas do Portal do Assessor (Bloco 4).
+- Escopo por parceiro no backend (Bloco 4).
+
+### Pendente — bloqueante para produção
+
+- Navegação unificada: menu principal por camada. Spec: `navigation-unification.md`.
+- Gestão de Acessos com UI Admin: tela CRUD de usuários dentro da PGP.
+
+### Pendente — bloqueante para homologação com parceiros reais
+
+- Configuração operacional do Entra ID: Conditional Access, Guest B2B ou multi-tenant (ADR-007).
+- Navegação unificada (experiência mínima para homologação).
+
+### Decisões em aberto antes de implementar o Bloco 5
+
+1. Como será a navegação principal unificada? (sidebar ou topbar; rota de Configurações)
+2. Qual a rota e estrutura da Gestão de Acessos dentro da PGP?
+3. A escrita no Dataverse será via API direta ou via Power Automate?
+4. A estratégia de autenticação para parceiros externos será Guest B2B, multi-tenant ou provider adicional?
 
 ## Ordem recomendada de implementação
 
-A ordem recomendada para as próximas mudanças é:
+### Já implementado (histórico)
 
-1. Remover a aba/rota `Scorecard`, seguindo `specs/features/remove-scorecard.md`.
-2. Implementar gestão de acessos internos, seguindo `specs/features/access-management.md`.
-3. Manter a proteção atual de páginas e APIs já feita na feature `access-management`.
-4. Definir tecnologia de persistência para Gestão de Acessos.
-5. Implementar modelo persistente de usuários, camadas, status e associação usuário-parceiro.
-6. Implementar camadas de acesso.
-7. Implementar escopo por parceiro no backend.
-8. Unificar o Portal do Assessor na rota `/portal-assessor`.
+1. ✅ Remover a aba/rota `Scorecard`.
+2. ✅ Implementar gestão de acessos internos (domínio Galapos).
+3. ✅ Migrar provider de autenticação para Microsoft Entra ID.
+4. ✅ Implementar Dataverse como persistência de autorização (somente leitura).
+5. ✅ Implementar camadas de acesso (Admin, Galapos, Parceiro) nas APIs e páginas.
+6. ✅ Implementar escopo por parceiro no backend.
+7. ✅ Implementar Portal do Assessor na rota `/portal-assessor` (MVP Parcial — Bloco 4).
 
-Observação:
+### Próximos passos (Bloco 5)
 
-- As features `access-layers` e `partner-portal-unification` dependem de decisão futura sobre persistência.
+8. Tomar as decisões em aberto do Bloco 5 (navegação, Gestão de Acessos, escrita no Dataverse).
+9. Implementar navegação unificada por camada (`navigation-unification.md`).
+10. Implementar Gestão de Acessos com UI Admin dentro da PGP.
+
+### Pós-Bloco 5
+
+11. Resolver configuração operacional de Entra ID para parceiros externos (ADR-007).
+12. Homologação com parceiros reais.
+13. Melhorias de UX no Portal do Assessor (Kanban, filtros, gráficos).
+14. Auditoria de acessos.
+15. Hardening e produção.
 
 ## Prompt base para futuras tarefas com IA
 

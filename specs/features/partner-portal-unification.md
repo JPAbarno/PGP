@@ -2,7 +2,18 @@
 
 ## Status
 
-Planejada.
+MVP Parcial Implementado — Bloco 4.
+
+As rotas, APIs e controle de acesso do Portal do Assessor foram implementados do zero dentro da arquitetura PGP no Bloco 4.
+
+Pendências para implementação completa:
+
+- Navegação unificada da PGP: menu principal mostrando Gestão do Canal e Portal do Assessor por camada. Especificado em `specs/features/navigation-unification.md`.
+- Gestão de Acessos com UI Admin: tela para criar/editar/inativar usuários dentro da PGP. Bloqueante para produção.
+- Pipeline em formato Kanban: a implementação atual usa tabela simples; o Kanban descrito nesta spec ainda não foi implementado.
+- Pré-preenchimento e travamento por parceiro no formulário HubSpot embedded: fora do escopo do Bloco 4, conforme previsto.
+
+Detalhes do que foi entregue estão na seção "Resultado do Bloco 4" ao final deste documento.
 
 ## Objetivo
 
@@ -35,6 +46,18 @@ A PGP atualmente possui o módulo `Gestão do Canal`, voltado à visão interna 
 O projeto `PortalAssessor` possui dashboards com outra perspectiva: a visão do parceiro/assessor sobre seus próprios dados.
 
 O Portal do Assessor deve se tornar parte natural da PGP, reutilizando a mesma base de dados, autenticação e modelo de autorização.
+
+## Nota sobre o Bloco 4 — Implementação vs. migração de código
+
+Esta spec foi escrita com a expectativa de "migrar" funcionalidades do projeto `PortalAssessor` para a PGP.
+
+Na prática, durante o Bloco 4, as funcionalidades do Portal do Assessor foram **implementadas do zero** dentro da arquitetura PGP. O código do projeto `PortalAssessor` ou `Portal XP` não estava disponível no repositório da PGP e não foi copiado nem migrado diretamente.
+
+A ADR-008 registra formalmente essa decisão e seus impactos para o roadmap.
+
+As seções "Funcionalidades a migrar" e "APIs a migrar ou adaptar" devem ser lidas como "funcionalidades a implementar com base na referência funcional do PortalAssessor", não como migração direta de código de outro repositório.
+
+O resultado do Bloco 4 é funcionalmente equivalente ao que estava especificado nesta feature, integrado nativamente à arquitetura PGP (snapshot, Dataverse, Auth.js).
 
 ## Diferença entre os módulos
 
@@ -599,6 +622,79 @@ A feature será considerada pronta quando:
 - debug routes e APIs estiverem restritas a `Admin`;
 - formulário HubSpot embedded estiver migrado e acessível aos usuários com acesso ao Portal do Assessor;
 - lint e build passarem.
+
+## Resultado do Bloco 4
+
+### O que foi implementado
+
+O Bloco 4 entregou o Portal do Assessor como módulo funcional dentro da PGP. Todo o código foi criado do zero — não houve migração de repositório externo.
+
+#### Rotas de tela criadas
+
+- `/portal-assessor`: landing com seletor de parceiro (Admin/Galapos) ou exibição do parceiro associado (Parceiro).
+- `/portal-assessor/pipeline`: tabela de deals com etapa, TCV, responsável, reuniões, propostas e contratos.
+- `/portal-assessor/clientes`: tabela de contratos/clientes com status e datas.
+- `/portal-assessor/comissoes`: cards de resumo + tabela de invoices com faturamento e comissão.
+- `/portal-assessor/enviar-oportunidade`: formulário HubSpot embedded simples.
+
+#### APIs criadas
+
+- `GET /api/portal-assessor/partners`: lista de parceiros filtrada por camada.
+- `GET /api/portal-assessor/deals`: pipeline filtrado por parceiro.
+- `GET /api/portal-assessor/clients`: contratos filtrados por parceiro (fonte: `contractMetrics`).
+- `GET /api/portal-assessor/invoices`: invoices financeiras filtradas por parceiro (fonte: `partnerMetrics[].deals[]`).
+
+#### Controle de acesso implementado
+
+- Verificação de sessão via `getServerSession`.
+- Consulta ao Dataverse via `getManagedAccessDecision()`.
+- Diferenciação de camadas: Admin/Galapos vs. Parceiro.
+- Escopo por parceiro aplicado no backend.
+- Parceiro tentando acessar parceiro divergente via query param retorna `403`.
+- Páginas protegidas por gate server-side.
+
+#### Componentes criados
+
+- `PartnerSelector`: seletor obrigatório para Admin/Galapos.
+- `PortalNav`: navegação interna do Portal do Assessor.
+- `PortalPageHeader`: cabeçalho padronizado de página.
+- `PortalErrorState`, `PortalEmptyState`, `PortalNoPartnerState`: estados de erro e vazio.
+- `HubspotFormEmbed`: embed do formulário HubSpot.
+
+### O que não foi implementado no Bloco 4
+
+- Navegação unificada da PGP: não existe menu principal mostrando Gestão do Canal e Portal do Assessor juntos. Os módulos funcionam como silos acessados por URL direta.
+- Gestão de Acessos com UI Admin: nenhuma tela de criação/edição de usuários dentro da PGP. A gestão ocorre manualmente no Power Apps/Dataverse.
+- Pipeline em formato Kanban: implementado como tabela simples, não Kanban com cards expansíveis.
+- Gráfico mensal de comissão: tela de comissões exibe tabela e cards de resumo, sem gráfico.
+- Filtros avançados por período, etapa e busca textual.
+- Modo leitura para Galapos em Configurações.
+
+### Critérios de aceite atendidos pelo Bloco 4
+
+- `/portal-assessor` existe dentro da PGP. ✅
+- Pipeline, clientes, comissões e formulário estão disponíveis. ✅
+- Usuário inativo é bloqueado. ✅
+- Usuário autenticado não cadastrado no Dataverse é bloqueado. ✅
+- Admin e Galapos selecionam obrigatoriamente parceiro. ✅
+- Parceiro visualiza apenas o parceiro associado. ✅
+- Parceiro visualiza apenas o nome do parceiro, sem controle editável. ✅
+- Parceiro sem associação válida recebe `403`. ✅
+- APIs aplicam escopo por parceiro no servidor. ✅
+- APIs validam sessão, camada, status, usuário gerenciado, matriz e escopo. ✅
+- Parceiro não consegue acessar outro parceiro via query param. ✅
+- Query param divergente para Parceiro retorna `403`. ✅
+- Parceiro não consegue acessar Gestão do Canal. ✅
+- Debug routes restritas a Admin. ✅
+- Formulário HubSpot embedded acessível. ✅
+
+### Critérios de aceite pendentes
+
+- Navegação principal com menus por camada: menu mostrando Gestão do Canal, Portal do Assessor e Configurações conforme camada. ❌
+- Gestão de Acessos operável dentro da PGP. ❌
+- Pipeline como Kanban. ❌
+- Gráfico mensal de comissão. ❌
+- Filtros avançados por data e etapa. ❌
 
 ## Dependências
 

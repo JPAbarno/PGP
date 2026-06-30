@@ -596,17 +596,55 @@ As etapas de implementação registraram execução bem-sucedida de:
 
 Evoluções já tratadas em fases e ADRs subsequentes:
 
-- camadas de acesso `Admin`, `Galapos` e `Parceiro`: especificado em `access-layers.md` e ADR-004.
-- persistência de acessos via Dataverse: ADR-006.
-- autenticação de parceiros externos — remoção da restrição de domínio: decisão em ADR-007, implementação pendente.
+- camadas de acesso `Admin`, `Galapos` e `Parceiro`: especificado em `access-layers.md` e ADR-004. Controle de acesso por camada foi implementado no Bloco 4.
+- persistência de acessos via Dataverse: ADR-006. Integração somente leitura implementada.
+- autenticação de parceiros externos — remoção da restrição de domínio: ADR-007, implementada no Bloco 3/Fase 3.
 
 Ainda pendentes e fora do escopo atual:
 
 - múltiplos providers de autenticação para parceiros sem conta Microsoft.
-- portal externo para parceiros ou assessores.
 - auditoria completa de acessos.
 
 Essas evoluções exigirão novas specs e ADRs antes de qualquer implementação.
+
+## Gestão de Acessos com UI Admin — Pendência bloqueante para produção
+
+Esta seção registra o que ainda precisa ser implementado para que a PGP possa operar em produção de forma autossuficiente.
+
+### Contexto
+
+A feature de gestão de acessos internos (esta spec) foi implementada. Ela cobre autenticação, autorização via Dataverse e proteção de rotas e APIs.
+
+No entanto, a **gestão dos registros de acesso ocorre manualmente no Power Apps/Dataverse**. Não existe tela dentro da PGP para que um Admin crie, edite ou inative usuários. Isso é um bloqueante operacional para produção.
+
+### O que falta implementar
+
+A PGP precisa de uma tela de Gestão de Acessos acessível em `/configuracoes/usuarios` (ou rota equivalente definida em spec futura) que permita ao Admin:
+
+- listar usuários cadastrados;
+- buscar usuários;
+- criar usuário (e-mail, camada, parceiro associado, status);
+- editar usuário (camada, parceiro, status);
+- ativar/inativar usuário;
+- remover acesso (inativar, não deletar).
+
+Para Galapos, a tela deve ser somente leitura — sem exibir secrets, tokens ou variáveis sensíveis.
+
+### Dependências desta implementação
+
+- Definição de rota e posição no menu para Gestão de Acessos (depende de `specs/features/navigation-unification.md`).
+- Decisão sobre escrita no Dataverse pela PGP: atualmente a integração é somente leitura. Antes de implementar a tela, é necessário definir se a escrita será via Dataverse API ou via Power Automate.
+- Spec de Gestão de Acessos com UI detalhada: `access-layers.md` (RF-012) define os requisitos funcionais da tela, mas uma spec dedicada de implementação pode ser necessária.
+
+### Bloqueantes para produção
+
+Enquanto a Gestão de Acessos com UI Admin não existir na PGP:
+
+- Novos usuários (Parceiro, Galapos) só podem ser adicionados manualmente via Power Apps.
+- Admin da PGP depende de acesso externo ao Dataverse para operar.
+- Não é possível operar a PGP de forma autossuficiente em produção.
+
+A implementação da Gestão de Acessos com UI Admin deve ser tratada antes da homologação com parceiros reais.
 
 ## Ordem sugerida de implementação
 

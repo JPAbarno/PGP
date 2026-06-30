@@ -2,7 +2,18 @@
 
 ## Status
 
-Planejada.
+Parcialmente Implementada — Bloco 4.
+
+O controle de acesso por camada (Admin, Galapos, Parceiro) foi implementado nas APIs e páginas do Portal do Assessor no Bloco 4.
+
+Pendências:
+
+- Navegação condicional por camada: menu principal diferenciado por perfil ainda não existe. Especificado em `specs/features/navigation-unification.md`.
+- Gestão de Acessos com UI Admin (tela CRUD de usuários): não implementada. Bloqueante para produção.
+- Modo leitura para Galapos em Configurações: não implementado.
+- Proteção por camada em rotas fora do Portal do Assessor: `/dashboard` tem gate de camada, mas o comportamento para Parceiro tentando acessar `/dashboard` diretamente precisa de validação.
+
+Detalhes do que foi entregue estão na seção "Resultado do Bloco 4" ao final deste documento.
 
 ## Objetivo
 
@@ -449,3 +460,35 @@ Esta feature depende de:
 9. Implementar modo leitura para Galapos.
 10. Preparar suporte ao Portal do Assessor.
 11. Testar tentativas de acesso indevido por URL/API.
+
+## Resultado do Bloco 4
+
+### O que foi implementado
+
+O Bloco 4 implementou controle de acesso por camada nas APIs e páginas do Portal do Assessor.
+
+#### Funções de autorização criadas
+
+- `getManagedAccessDecision(email)`: consulta Dataverse e retorna camada, status e parceiro do usuário.
+- `isManagedAccessAllowed(decision)`: valida se o acesso é permitido (usuário ativo e cadastrado).
+- `isAdminOrGalaposAccess(decision)`: verifica se a camada é Admin ou Galapos.
+- `isPartnerAccess(decision)`: verifica se a camada é Parceiro.
+- `resolvePortalPartnerScope(decision, queryParam)`: resolve parceiro de visualização; para Parceiro, valida e rejeita divergência com `403`.
+
+#### O que foi protegido
+
+- Todas as APIs do Portal do Assessor validam: sessão, camada, status, usuário gerenciado, matriz camada/escopo e escopo por parceiro.
+- A página `/dashboard` (Gestão do Canal) tem gate server-side: apenas Admin e Galapos acessam.
+- O módulo `/portal-assessor` e suas subrotas têm gate server-side.
+- Tentativa de Parceiro acessar parceiro divergente via query param retorna `403`.
+
+#### Persistência
+
+O Dataverse (`cr683_pgpusuarios`) é a fonte de autorização, conforme ADR-006. A integração é somente leitura. A gestão de registros ocorre manualmente no Power Apps.
+
+### O que não foi implementado no Bloco 4
+
+- **Navegação condicional por camada**: não existe menu principal que adapta itens visíveis por camada. Os módulos são acessados por URL direta. Pendente em `specs/features/navigation-unification.md`.
+- **Gestão de Acessos com UI Admin**: nenhuma tela de CRUD de usuários dentro da PGP. Bloqueante para produção.
+- **Modo leitura para Galapos em Configurações**: não implementado.
+- **Proteção de `/dashboard` para Parceiro**: o gate do `/dashboard` foi implementado, mas o fluxo completo de Parceiro tentando acessar `/dashboard` diretamente requer validação manual.
