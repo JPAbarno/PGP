@@ -3,9 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { getManagedAccessDecision, isAdminOrGalaposAccess } from "@/lib/access-control";
 import { PortalShell } from "@/components/portal-shell";
-import { PartnerAnalyticsLoader } from "@/components/partner-analytics-loader";
 
-export default async function DashboardPage() {
+export default async function ConfiguracoesPage() {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
@@ -22,7 +21,7 @@ export default async function DashboardPage() {
       role = "admin";
     }
   } catch {
-    // Dataverse error: fail closed, acesso negado genérico
+    // Dataverse error: fail closed
   }
 
   if (!accessAllowed) {
@@ -31,13 +30,36 @@ export default async function DashboardPage() {
 
   return (
     <PortalShell
-      active="dashboard"
+      active="configuracoes"
       role={role}
       userEmail={session.user?.email ?? ""}
-      title="Dashboard"
-      subtitle="Estrutura inicial para comparar parceiros com filtros, ranking e leituras de pareto por reuniões, propostas e contratos."
+      title="Configurações"
+      subtitle="Configurações e gestão da plataforma PGP."
     >
-      <PartnerAnalyticsLoader />
+      <div
+        style={{
+          background: "rgba(255,255,255,0.03)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 8,
+          maxWidth: 600,
+          padding: 28,
+        }}
+      >
+        <p
+          style={{
+            color: "#9ca3af",
+            fontSize: 12,
+            letterSpacing: "0.08em",
+            marginBottom: 8,
+            textTransform: "uppercase",
+          }}
+        >
+          Gestão de Acessos
+        </p>
+        <p style={{ color: "#e5e7eb", fontSize: 15, lineHeight: 1.6, margin: 0 }}>
+          A tela de Gestão de Acessos será implementada em fase futura.
+        </p>
+      </div>
     </PortalShell>
   );
 }

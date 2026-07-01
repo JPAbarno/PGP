@@ -1,15 +1,45 @@
 import type { ReactNode } from "react";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
+import { getManagedAccessDecision } from "@/lib/access-control";
+import type { MainNavRole } from "@/components/main-nav";
+import { MainNav } from "@/components/main-nav";
 import { PortalNav } from "./_components/portal-nav";
 
-export default function PortalAssessorLayout({ children }: { children: ReactNode }) {
+export default async function PortalAssessorLayout({ children }: { children: ReactNode }) {
+  let role: MainNavRole = "partner";
+  let partnerName: string | null = null;
+  let userEmail = "";
+
+  try {
+    const session = await getServerSession(authOptions);
+    userEmail = session?.user?.email ?? "";
+
+    if (userEmail) {
+      const decision = await getManagedAccessDecision(userEmail);
+      if (decision.access === "allowed") {
+        role = decision.role;
+        partnerName = decision.partnerName;
+      }
+    }
+  } catch {
+    // Dataverse error: default conservador (partner = itens mínimos de nav)
+  }
+
   return (
     <div style={{ minHeight: "100vh" }}>
-      <header
+      <MainNav
+        role={role}
+        active="portal-assessor"
+        userEmail={userEmail}
+        partnerName={partnerName}
+      />
+      <div
         style={{
-          background: "linear-gradient(180deg, #191919 0%, #161616 100%)",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          background: "linear-gradient(180deg, #141414 0%, #111111 100%)",
+          borderBottom: "1px solid rgba(255,255,255,0.06)",
           position: "sticky",
-          top: 0,
+          top: 64,
           zIndex: 20,
         }}
       >
@@ -17,18 +47,16 @@ export default function PortalAssessorLayout({ children }: { children: ReactNode
           style={{
             alignItems: "center",
             display: "flex",
-            gap: 24,
             justifyContent: "space-between",
             margin: "0 auto",
             maxWidth: 1180,
-            minHeight: 72,
-            padding: "14px 32px",
+            padding: "10px 32px",
           }}
         >
-          <div
+          <span
             style={{
               color: "#FFC130",
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: 700,
               letterSpacing: "0.12em",
               textTransform: "uppercase",
@@ -36,11 +64,10 @@ export default function PortalAssessorLayout({ children }: { children: ReactNode
             }}
           >
             Portal do Assessor
-          </div>
+          </span>
           <PortalNav />
         </div>
-      </header>
-
+      </div>
       <main>{children}</main>
     </div>
   );
